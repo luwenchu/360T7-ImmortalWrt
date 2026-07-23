@@ -35,6 +35,7 @@ Release 会更新原有资产，不创建其他机型产物。
 构建成功后可从 Actions artifact 或仓库 Releases 下载：
 
 - `*qihoo_360t7*sysupgrade.itb`
+- 同一 ImageBuilder 版本的 `*qihoo_360t7*initramfs-recovery.itb`
 - 对应包清单、固件元数据和 SHA-256 校验文件
 - 外部 daed/BTF IPK 的 SHA-256 清单
 
@@ -49,6 +50,31 @@ chmod +x scripts/build.sh
 ```
 
 产物输出到 `dist/`。`work/` 和 `dist/` 均为临时生成目录。
+
+## 正确刷写入口
+
+不要把 `squashfs-sysupgrade.itb` 上传到 U-Boot 自身的 Web 更新页面；
+该页面会按 U-Boot 的固件格式规则拒绝 sysupgrade 文件，改成 `.bin`
+后缀也不会改变内部格式。
+
+如果现有 ImmortalWrt 可以正常启动，直接在 LuCI 的“备份/升级”页面
+上传 `squashfs-sysupgrade.itb`，或者通过 SSH 执行：
+
+```bash
+sysupgrade -n /tmp/immortalwrt-*-qihoo_360t7-*-squashfs-sysupgrade.itb
+```
+
+如果只能进入 U-Boot，先通过 U-Boot/TFTP 启动 Release 中的
+`initramfs-recovery.itb`。某些 360T7 U-Boot 固定请求以下文件名，
+部署到 TFTP 根目录前需要重命名：
+
+```text
+openwrt-mediatek-filogic-qihoo_360t7-initramfs-recovery.itb
+```
+
+恢复系统启动后访问 `192.168.1.1`，再上传本仓库生成的
+`squashfs-sysupgrade.itb`。initramfs 只用于在内存中启动恢复环境，
+不包含 daed；daed 和匹配 BTF 位于最终 sysupgrade 固件中。
 
 ## 刷写限制
 

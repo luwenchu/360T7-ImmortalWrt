@@ -54,14 +54,34 @@ arch_packages="$(jq -r '.arch_packages' "${WORK_DIR}/profiles.json")"
 supported_device="$(jq -r --arg profile "${PROFILE}" \
   '.profiles[$profile].supported_devices[] | select(. == "qihoo,360t7")' \
   "${WORK_DIR}/profiles.json")"
+recovery_name="$(jq -r --arg profile "${PROFILE}" '
+  .profiles[$profile].images[]
+  | select(.type == "kernel" and .filesystem == "initramfs")
+  | .name
+' "${WORK_DIR}/profiles.json")"
+recovery_sha256="$(jq -r --arg profile "${PROFILE}" '
+  .profiles[$profile].images[]
+  | select(.type == "kernel" and .filesystem == "initramfs")
+  | .sha256
+' "${WORK_DIR}/profiles.json")"
 
 if [[ "${target}" != "mediatek/filogic" ||
       "${ib_version}" != "24.10-SNAPSHOT" ||
       "${arch_packages}" != "${ARCH}" ||
-      "${supported_device}" != "qihoo,360t7" ]]; then
+      "${supported_device}" != "qihoo,360t7" ||
+      ! "${recovery_sha256}" =~ ^[0-9a-f]{64}$ ||
+      "${recovery_name}" != *qihoo_360t7*initramfs-recovery.itb ]]; then
   echo "ImageBuilder metadata does not match the dedicated 360T7 target." >&2
   exit 1
 fi
+
+echo "Downloading the matching 360T7 initramfs recovery image..."
+recovery_path="${DIST_DIR}/${recovery_name}"
+curl --fail --location --retry 4 --retry-all-errors \
+  --connect-timeout 20 --max-time 600 \
+  --output "${recovery_path}" \
+  "${IMMORTALWRT_ROOT}/${recovery_name}"
+echo "${recovery_sha256}  ${recovery_path}" | sha256sum --check -
 
 expected_ib_sha256="$(
   awk -v file="${IMAGEBUILDER_FILE}" '$2 == "*" file { print $1 }' \
@@ -323,6 +343,11 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - Integrated packages: \`${daed_asset}\` (\`${daed_version}\`),
   \`${luci_asset}\` (\`${luci_version}\`), \`${btf_asset}\` (\`${btf_version}\`)
 - Default LAN address on a clean installation: \`192.168.233.1\`
+
+The initramfs recovery image is the checksum-verified upstream image matching
+this ImageBuilder revision. It runs from RAM and intentionally does not contain
+daed. Boot it first when recovering through U-Boot, then flash the dedicated
+sysupgrade image from the recovery system.
 
 The build fails instead of publishing when the daed Release does not contain a
 BTF package matching both the ImageBuilder kernel version and package architecture.
