@@ -37,7 +37,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
-            build-essential ca-certificates curl file gawk gettext jq \
+            build-essential ca-certificates curl device-tree-compiler file gawk gettext jq \
             libncurses-dev python3 rsync u-boot-tools unzip zstd
 
       - name: Resolve ImageBuilder cache key
