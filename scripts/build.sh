@@ -9,7 +9,7 @@ ARCH="aarch64_cortex-a53"
 IMMORTALWRT_ROOT="${IMMORTALWRT_ROOT:-https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/targets/mediatek/filogic}"
 DAED_REPOSITORY="${DAED_REPOSITORY:-kenzok8/openwrt-daede}"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
-IMAGE_PACKAGES="daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn"
+IMAGE_PACKAGES="daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -316,6 +316,8 @@ done
 
 for required_package in \
   luci-theme-argon \
+  luci-app-argon-config \
+  luci-i18n-argon-config-zh-cn \
   openvpn-openssl \
   openvpn-easy-rsa \
   luci-app-openvpn-server \
@@ -454,7 +456,8 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - daed Release: \`${daed_tag}\`
 - Integrated packages: \`${daed_asset}\` (\`${daed_version}\`),
   \`${luci_asset}\` (\`${luci_version}\`), \`${btf_asset}\` (\`${btf_version}\`)
-- LuCI theme: \`luci-theme-argon\` (selected as the default theme)
+- LuCI theme: \`luci-theme-argon\` (selected as the default theme),
+  \`luci-app-argon-config\` and its Chinese translation
 - OpenVPN server: \`luci-app-openvpn-server\` with Chinese translation,
   port/protocol settings, client push directives, certificate generation and
   downloadable \`.ovpn\` client configuration

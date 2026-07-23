@@ -20,7 +20,9 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   字段完全一致；不允许回退到 ImmortalWrt 软件源中的旧版本。
 - daed 服务保持默认禁用，完成配置并确认路由策略后再启用，避免新刷固件
   在未配置状态下接管流量。
-- 集成 `luci-theme-argon` 并设为默认 LuCI 主题。
+- 集成 `luci-theme-argon` 并设为默认 LuCI 主题，同时安装
+  `luci-app-argon-config` 及简体中文翻译，用于调整背景、主色和透明度等
+  主题选项。
 - 集成专用 `luci-app-openvpn-server` 和简体中文翻译，可设置服务端端口、
   TCP/UDP 与 IPv4/IPv6 协议、客户端网段和 push 指令，并可生成证书及
   下载内嵌证书的 `.ovpn` 客户端配置。
