@@ -213,11 +213,13 @@ if [[ "${imagebuilder_status}" -ne 0 ]]; then
 fi
 
 echo "Locating the dedicated 360T7 sysupgrade image..."
+find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
+  -maxdepth 1 -type f -printf 'Generated: %f\n'
 mapfile -t sysupgrade_images < <(
   find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
     -maxdepth 1 -type f \
     -name '*qihoo_360t7*squashfs-sysupgrade.itb' -print
-)
+) || true
 if [[ "${#sysupgrade_images[@]}" -ne 1 ]]; then
   echo "Expected exactly one qihoo_360t7 sysupgrade image; found ${#sysupgrade_images[@]}." >&2
   exit 1
