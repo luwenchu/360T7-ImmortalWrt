@@ -16,7 +16,8 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - BTF 必须同时匹配 ImageBuilder 的内核版本和
   `aarch64_cortex-a53` 架构；没有唯一匹配项时构建立即失败。
 - 生成后检查包 manifest，确认 `daed`、`luci-app-daede` 和
-  `vmlinux-btf` 已进入固件。
+  `vmlinux-btf` 已进入固件，并且版本与下载的 Release IPK control
+  字段完全一致；不允许回退到 ImmortalWrt 软件源中的旧版本。
 - daed 服务保持默认禁用，完成配置并确认路由策略后再启用，避免新刷固件
   在未配置状态下接管流量。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。

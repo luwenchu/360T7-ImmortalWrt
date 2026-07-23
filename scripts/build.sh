@@ -156,6 +156,29 @@ for asset in "${daed_asset}" "${luci_asset}" "${btf_asset}"; do
   fi
 done
 
+package_version() {
+  local package_file="$1"
+  tar --extract --to-stdout --file "${package_file}" ./control.tar.gz |
+    tar --extract --gzip --to-stdout --file - ./control |
+    awk -F ': ' '$1 == "Version" { print $2; exit }'
+}
+
+daed_version="$(
+  package_version "${WORK_DIR}/external-packages/${daed_asset}"
+)"
+luci_version="$(
+  package_version "${WORK_DIR}/external-packages/${luci_asset}"
+)"
+btf_version="$(
+  package_version "${WORK_DIR}/external-packages/${btf_asset}"
+)"
+for version in "${daed_version}" "${luci_version}" "${btf_version}"; do
+  if [[ -z "${version}" ]]; then
+    echo "Could not read an exact package version from the Release IPKs." >&2
+    exit 1
+  fi
+done
+
 (
   cd "${WORK_DIR}/external-packages"
   sha256sum -- *.ipk >"${DIST_DIR}/external-packages.sha256"
@@ -199,7 +222,7 @@ tar --create --gzip \
   --owner=0 --group=0 --numeric-owner \
   --file "${repack_dir}/outer/data.tar.gz" \
   --directory "${repack_dir}/data" .
-tar --create \
+tar --create --gzip \
   --owner=0 --group=0 --numeric-owner \
   --file "${patched_packages}/${daed_asset}" \
   --directory "${repack_dir}/outer" \
@@ -256,9 +279,16 @@ if [[ -z "${manifest}" ]]; then
 fi
 cp "${manifest}" "${DIST_DIR}/${firmware_name%.itb}.manifest"
 
+declare -A required_versions=(
+  [daed]="${daed_version}"
+  [luci-app-daede]="${luci_version}"
+  [vmlinux-btf]="${btf_version}"
+)
 for required_package in daed luci-app-daede vmlinux-btf; do
-  if ! grep -qE "^${required_package} -" "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
-    echo "${required_package} is absent from the generated image manifest." >&2
+  expected_manifest_line="${required_package} - ${required_versions[$required_package]}"
+  if ! grep -Fxq "${expected_manifest_line}" \
+    "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
+    echo "Expected '${expected_manifest_line}' in the generated image manifest." >&2
     exit 1
   fi
 done
@@ -290,7 +320,8 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - Architecture: \`${ARCH}\`
 - Kernel: \`${kernel_version}\`
 - daed Release: \`${daed_tag}\`
-- Integrated packages: \`${daed_asset}\`, \`${luci_asset}\`, \`${btf_asset}\`
+- Integrated packages: \`${daed_asset}\` (\`${daed_version}\`),
+  \`${luci_asset}\` (\`${luci_version}\`), \`${btf_asset}\` (\`${btf_version}\`)
 - Default LAN address on a clean installation: \`192.168.233.1\`
 
 The build fails instead of publishing when the daed Release does not contain a
