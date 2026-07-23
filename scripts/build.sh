@@ -198,11 +198,17 @@ tar --create \
 cp "${patched_packages}"/*.ipk "${imagebuilder_dir}/packages/"
 
 echo "Building the dedicated ${PROFILE} image..."
+set +e
 make -C "${imagebuilder_dir}" image \
   PROFILE="${PROFILE}" \
   PACKAGES="daed luci-app-daede vmlinux-btf" \
   DISABLED_SERVICES="daed" \
   FILES="${ROOT_DIR}/files"
+imagebuilder_status=$?
+set -e
+if [[ "${imagebuilder_status}" -ne 0 ]]; then
+  echo "ImageBuilder returned ${imagebuilder_status}; validating generated output before deciding failure."
+fi
 
 mapfile -t sysupgrade_images < <(
   find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
