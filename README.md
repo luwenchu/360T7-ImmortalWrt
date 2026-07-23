@@ -21,9 +21,10 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - daed 服务保持默认禁用，完成配置并确认路由策略后再启用，避免新刷固件
   在未配置状态下接管流量。
 - 集成 `luci-theme-argon` 并设为默认 LuCI 主题。
-- 集成 `openvpn-openssl`、`luci-app-openvpn` 和简体中文翻译，供配置
-  OpenVPN 服务端；固件不预置证书、私钥或不安全的默认账号。
-- 集成开源多 WAN 流量分载引擎 `mwan3`、LuCI 管理界面和简体中文翻译。
+- 集成专用 `luci-app-openvpn-server` 和简体中文翻译，可设置服务端端口、
+  TCP/UDP 与 IPv4/IPv6 协议、客户端网段和 push 指令，并可生成证书及
+  下载内嵌证书的 `.ovpn` 客户端配置。
+- 不安装普通 `luci-app-openvpn`，也不安装 `mwan3` 及其 LuCI/翻译包。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。
 - 上游 ImageBuilder 即使完成 FIT 和校验和也可能返回非零；工作流不以该
   状态单独判定成功，而是强制执行机型、包清单和固件元数据校验。
