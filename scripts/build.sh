@@ -146,33 +146,62 @@ for asset in "${daed_asset}" "${luci_asset}" "${btf_asset}"; do
   fi
 done
 
-cp "${WORK_DIR}"/external-packages/*.ipk "${imagebuilder_dir}/packages/"
 (
   cd "${WORK_DIR}/external-packages"
   sha256sum -- *.ipk >"${DIST_DIR}/external-packages.sha256"
 )
 
-custom_files="${WORK_DIR}/custom-files"
-mkdir -p "${custom_files}"
-cp -a "${ROOT_DIR}/files/." "${custom_files}/"
+patched_packages="${WORK_DIR}/patched-packages"
+repack_dir="${WORK_DIR}/daed-repack"
+mkdir -p "${patched_packages}" "${repack_dir}/outer" "${repack_dir}/data"
+cp "${WORK_DIR}/external-packages/${luci_asset}" "${patched_packages}/"
+cp "${WORK_DIR}/external-packages/${btf_asset}" "${patched_packages}/"
 
-# The current daed IPK contains cleanup.sh, but the ImageBuilder finalization
-# phase can lose it before the init script is evaluated. Restore the exact file
-# from the selected Release package rather than maintaining a divergent copy.
-tar --extract --to-stdout \
-  --file "${WORK_DIR}/external-packages/${daed_asset}" ./data.tar.gz |
-  tar --extract --gzip --file - --directory "${custom_files}" \
-    ./usr/share/daed/cleanup.sh
-if [[ ! -s "${custom_files}/usr/share/daed/cleanup.sh" ]]; then
-  echo "Could not restore daed cleanup.sh from ${daed_asset}." >&2
+# During ImageBuilder finalization, init scripts run from the target rootfs but
+# outside chroot. The upstream daed init script sources an absolute target path,
+# which resolves against the Ubuntu runner and makes ImageBuilder return 1.
+# Repack the already verified IPK with a relative-root fallback for build time.
+tar --extract \
+  --file "${WORK_DIR}/external-packages/${daed_asset}" \
+  --directory "${repack_dir}/outer"
+tar --extract --gzip \
+  --file "${repack_dir}/outer/data.tar.gz" \
+  --directory "${repack_dir}/data"
+daed_init="${repack_dir}/data/etc/init.d/daed"
+if [[ "$(grep -c '^\. /usr/share/daed/cleanup\.sh$' "${daed_init}")" != "1" ]]; then
+  echo "The daed init script has an unexpected cleanup helper declaration." >&2
   exit 1
 fi
+
+awk '
+  $0 == ". /usr/share/daed/cleanup.sh" {
+    print "DAED_CLEANUP=/usr/share/daed/cleanup.sh"
+    print "[ -r \"$DAED_CLEANUP\" ] || DAED_CLEANUP=./usr/share/daed/cleanup.sh"
+    print ". \"$DAED_CLEANUP\""
+    next
+  }
+  { print }
+' "${daed_init}" >"${daed_init}.patched"
+mv "${daed_init}.patched" "${daed_init}"
+chmod 0755 "${daed_init}"
+
+tar --create --gzip \
+  --owner=0 --group=0 --numeric-owner \
+  --file "${repack_dir}/outer/data.tar.gz" \
+  --directory "${repack_dir}/data" .
+tar --create \
+  --owner=0 --group=0 --numeric-owner \
+  --file "${patched_packages}/${daed_asset}" \
+  --directory "${repack_dir}/outer" \
+  ./debian-binary ./control.tar.gz ./data.tar.gz
+
+cp "${patched_packages}"/*.ipk "${imagebuilder_dir}/packages/"
 
 echo "Building the dedicated ${PROFILE} image..."
 make -C "${imagebuilder_dir}" image \
   PROFILE="${PROFILE}" \
   PACKAGES="daed luci-app-daede vmlinux-btf" \
-  FILES="${custom_files}"
+  FILES="${ROOT_DIR}/files"
 
 mapfile -t sysupgrade_images < <(
   find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \

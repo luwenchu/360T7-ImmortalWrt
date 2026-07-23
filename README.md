@@ -10,8 +10,9 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   `qihoo,360t7` supported device。
 - 从 `kenzok8/openwrt-daede` 的当前最新 Release 下载
   `daed`、`luci-app-daede` 和 `vmlinux-btf` IPK。
-- 从所选 daed IPK 提取其原始 `cleanup.sh` 并作为文件覆盖层恢复，规避
-  ImageBuilder 最终处理阶段丢失该文件导致 init 脚本失败的问题。
+- 对已校验的 daed IPK 做最小构建兼容修补：保留 Release 二进制与
+  `cleanup.sh`，只给 init 脚本的绝对引用增加 ImageBuilder rootfs
+  相对路径回退，避免其在 Ubuntu 宿主环境执行时错误退出。
 - BTF 必须同时匹配 ImageBuilder 的内核版本和
   `aarch64_cortex-a53` 架构；没有唯一匹配项时构建立即失败。
 - 生成后检查包 manifest，确认 `daed`、`luci-app-daede` 和
