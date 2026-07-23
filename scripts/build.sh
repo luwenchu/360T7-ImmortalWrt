@@ -201,6 +201,7 @@ echo "Building the dedicated ${PROFILE} image..."
 make -C "${imagebuilder_dir}" image \
   PROFILE="${PROFILE}" \
   PACKAGES="daed luci-app-daede vmlinux-btf" \
+  DISABLED_SERVICES="daed" \
   FILES="${ROOT_DIR}/files"
 
 mapfile -t sysupgrade_images < <(

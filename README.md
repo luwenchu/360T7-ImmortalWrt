@@ -17,6 +17,8 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   `aarch64_cortex-a53` 架构；没有唯一匹配项时构建立即失败。
 - 生成后检查包 manifest，确认 `daed`、`luci-app-daede` 和
   `vmlinux-btf` 已进入固件。
+- daed 服务保持默认禁用，完成配置并确认路由策略后再启用，避免新刷固件
+  在未配置状态下接管流量。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。
 - 全新安装的默认 LAN 地址为 `192.168.233.1`。
 
