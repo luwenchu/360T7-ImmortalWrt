@@ -403,19 +403,13 @@ if [[ "${#legacy_source_images[@]}" -ne 1 ]]; then
   exit 1
 fi
 
-legacy_metadata="${WORK_DIR}/legacy.metadata.json"
-"${fwtool}" -i "${legacy_metadata}" "${legacy_source_images[0]}"
-jq -e '
-  .supported_devices | index("qihoo,360t7") != null
-' "${legacy_metadata}" >/dev/null
-
 uboot_web_name="${firmware_name%.itb}-uboot-web.bin"
 bash "${ROOT_DIR}/scripts/make-uboot-web.sh" \
   "${imagebuilder_dir}" \
   "${legacy_source_images[0]}" \
   "${DIST_DIR}/${uboot_web_name}" \
   "${kernel_version}" \
-  "${legacy_metadata}"
+  "${metadata_file}"
 (
   cd "${DIST_DIR}"
   sha256sum -- "${uboot_web_name}" >"${uboot_web_name}.sha256"
