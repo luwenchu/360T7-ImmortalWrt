@@ -44,7 +44,7 @@ jobs:
         id: build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scripts/build.sh
+        run: bash ./scripts/build.sh
 
       - name: Upload verified firmware artifact
         uses: actions/upload-artifact@v4
@@ -67,4 +67,3 @@ jobs:
             dist/*.sha256
           fail_on_unmatched_files: true
           overwrite_files: true
-
