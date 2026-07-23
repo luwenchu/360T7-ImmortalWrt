@@ -404,7 +404,8 @@ if [[ "${#legacy_source_images[@]}" -ne 1 ]]; then
 fi
 
 uboot_web_name="${firmware_name%.itb}-uboot-web.bin"
-bash "${ROOT_DIR}/scripts/make-uboot-web.sh" \
+echo "Converting ${legacy_source_images[0]} to ${uboot_web_name}..."
+bash -x "${ROOT_DIR}/scripts/make-uboot-web.sh" \
   "${imagebuilder_dir}" \
   "${legacy_source_images[0]}" \
   "${DIST_DIR}/${uboot_web_name}" \
