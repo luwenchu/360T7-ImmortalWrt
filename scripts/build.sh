@@ -379,11 +379,19 @@ if grep -Fq $'\tqihoo,360t7|\\' "${legacy_platform}"; then
 fi
 
 echo "Building the rootfs variant dedicated to the legacy U-Boot layout..."
-make -C "${imagebuilder_dir}" image \
-  PROFILE="${PROFILE}" \
-  PACKAGES="daed luci-app-daede vmlinux-btf" \
-  DISABLED_SERVICES="daed" \
-  FILES="${legacy_files}"
+if make -C "${imagebuilder_dir}" image \
+    PROFILE="${PROFILE}" \
+    PACKAGES="daed luci-app-daede vmlinux-btf" \
+    DISABLED_SERVICES="daed" \
+    FILES="${legacy_files}"; then
+  legacy_imagebuilder_status=0
+else
+  legacy_imagebuilder_status=$?
+fi
+echo "Legacy-layout ImageBuilder command status: ${legacy_imagebuilder_status}"
+if [[ "${legacy_imagebuilder_status}" -ne 0 ]]; then
+  echo "ImageBuilder returned ${legacy_imagebuilder_status}; validating the generated legacy-layout source image."
+fi
 
 shopt -s nullglob
 legacy_source_images=(
