@@ -13,13 +13,24 @@ kernel_version="$4"
 metadata_json="$(realpath "$5")"
 
 host_bin="${imagebuilder_dir}/staging_dir/host/bin"
-dumpimage="${host_bin}/dumpimage"
-fdtget="${host_bin}/fdtget"
-fdtput="${host_bin}/fdtput"
-fwtool="${host_bin}/fwtool"
-mkimage="${host_bin}/mkimage"
 mkits="${imagebuilder_dir}/scripts/mkits.sh"
 sysupgrade_tar="${imagebuilder_dir}/scripts/sysupgrade-tar.sh"
+
+resolve_tool() {
+  local tool_name="$1"
+  local bundled_tool="${host_bin}/${tool_name}"
+  if [[ -x "${bundled_tool}" ]]; then
+    printf '%s\n' "${bundled_tool}"
+    return
+  fi
+  command -v "${tool_name}"
+}
+
+dumpimage="$(resolve_tool dumpimage)"
+fdtget="$(resolve_tool fdtget)"
+fdtput="$(resolve_tool fdtput)"
+fwtool="$(resolve_tool fwtool)"
+mkimage="$(resolve_tool mkimage)"
 
 for tool in "${dumpimage}" "${fdtget}" "${fdtput}" "${fwtool}" \
   "${mkimage}" "${mkits}" "${sysupgrade_tar}"; do
@@ -55,6 +66,13 @@ image_index() {
 kernel_index="$(image_index kernel-1)"
 fdt_index="$(image_index fdt-1)"
 rootfs_index="$(image_index rootfs-1)"
+kernel_load="0x$("${fdtget}" -t x "${sysupgrade_itb}" /images/kernel-1 load)"
+kernel_entry="0x$("${fdtget}" -t x "${sysupgrade_itb}" /images/kernel-1 entry)"
+if [[ ! "${kernel_load}" =~ ^0x[0-9a-fA-F]+$ ||
+      ! "${kernel_entry}" =~ ^0x[0-9a-fA-F]+$ ]]; then
+  echo "Could not read the kernel load and entry addresses from the FIT." >&2
+  exit 1
+fi
 
 kernel_gz="${work_dir}/kernel.bin.gz"
 legacy_dtb="${work_dir}/qihoo-360t7-legacy.dtb"
@@ -85,8 +103,8 @@ legacy_kernel="${work_dir}/kernel-legacy.itb"
 "${mkits}" \
   -A arm64 \
   -C gzip \
-  -a 0x44000000 \
-  -e 0x44000000 \
+  -a "${kernel_load}" \
+  -e "${kernel_entry}" \
   -v "${kernel_version}" \
   -k "${kernel_gz}" \
   -D qihoo_360t7 \
