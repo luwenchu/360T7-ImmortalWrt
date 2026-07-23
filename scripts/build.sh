@@ -9,6 +9,7 @@ ARCH="aarch64_cortex-a53"
 IMMORTALWRT_ROOT="${IMMORTALWRT_ROOT:-https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/targets/mediatek/filogic}"
 DAED_REPOSITORY="${DAED_REPOSITORY:-kenzok8/openwrt-daede}"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
+IMAGE_PACKAGES="daed luci-app-daede vmlinux-btf luci-theme-argon openvpn-openssl luci-app-openvpn luci-i18n-openvpn-zh-cn mwan3 luci-app-mwan3 luci-i18n-mwan3-zh-cn"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -253,7 +254,7 @@ cp "${patched_packages}"/*.ipk "${imagebuilder_dir}/packages/"
 echo "Building the dedicated ${PROFILE} image..."
 if make -C "${imagebuilder_dir}" image \
     PROFILE="${PROFILE}" \
-    PACKAGES="daed luci-app-daede vmlinux-btf" \
+    PACKAGES="${IMAGE_PACKAGES}" \
     DISABLED_SERVICES="daed" \
     FILES="${ROOT_DIR}/files"; then
   imagebuilder_status=0
@@ -309,6 +310,21 @@ for required_package in daed luci-app-daede vmlinux-btf; do
   if ! grep -Fxq "${expected_manifest_line}" \
     "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
     echo "Expected '${expected_manifest_line}' in the generated image manifest." >&2
+    exit 1
+  fi
+done
+
+for required_package in \
+  luci-theme-argon \
+  openvpn-openssl \
+  luci-app-openvpn \
+  luci-i18n-openvpn-zh-cn \
+  mwan3 \
+  luci-app-mwan3 \
+  luci-i18n-mwan3-zh-cn; do
+  if ! grep -q "^${required_package} - " \
+    "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
+    echo "Expected ${required_package} in the generated image manifest." >&2
     exit 1
   fi
 done
@@ -381,7 +397,7 @@ fi
 echo "Building the rootfs variant dedicated to the legacy U-Boot layout..."
 if make -C "${imagebuilder_dir}" image \
     PROFILE="${PROFILE}" \
-    PACKAGES="daed luci-app-daede vmlinux-btf" \
+    PACKAGES="${IMAGE_PACKAGES}" \
     DISABLED_SERVICES="daed" \
     FILES="${legacy_files}"; then
   legacy_imagebuilder_status=0
@@ -427,6 +443,9 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - daed Release: \`${daed_tag}\`
 - Integrated packages: \`${daed_asset}\` (\`${daed_version}\`),
   \`${luci_asset}\` (\`${luci_version}\`), \`${btf_asset}\` (\`${btf_version}\`)
+- LuCI theme: \`luci-theme-argon\` (selected as the default theme)
+- OpenVPN server: \`openvpn-openssl\`, \`luci-app-openvpn\`, Chinese translation
+- Multi-WAN load balancing: \`mwan3\`, \`luci-app-mwan3\`, Chinese translation
 - Default LAN address on a clean installation: \`192.168.233.1\`
 
 The initramfs recovery image is the checksum-verified upstream image matching
