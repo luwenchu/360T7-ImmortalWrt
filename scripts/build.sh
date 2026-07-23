@@ -17,7 +17,7 @@ require_command() {
   }
 }
 
-for command_name in curl jq sha256sum tar zstd make find; do
+for command_name in curl jq sha256sum tar zstd make find realpath od; do
   require_command "${command_name}"
 done
 
@@ -322,13 +322,95 @@ if [[ -x "${fwtool}" ]]; then
     .supported_devices | index("qihoo,360t7") != null
   ' "${metadata_file}" >/dev/null
 else
-  jq --arg warning "fwtool was unavailable; profile validation was performed before the build." \
-    '{warning: $warning}' >"${metadata_file}"
+  echo "fwtool is required to validate both sysupgrade formats." >&2
+  exit 1
 fi
 
 (
   cd "${DIST_DIR}"
   sha256sum -- "${firmware_name}" >"${firmware_name}.sha256"
+)
+
+echo "Preparing the legacy kernel/rootfs upgrade logic for the U-Boot Web image..."
+legacy_files="${WORK_DIR}/legacy-files"
+cp -a "${ROOT_DIR}/files" "${legacy_files}"
+legacy_platform_source="${imagebuilder_dir}/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh"
+legacy_platform="${legacy_files}/lib/upgrade/platform.sh"
+if [[ ! -f "${legacy_platform_source}" ]]; then
+  legacy_platform_source="${WORK_DIR}/platform.sh"
+  curl --fail --location --retry 4 --retry-all-errors \
+    --connect-timeout 20 --max-time 300 \
+    --output "${legacy_platform_source}" \
+    "https://raw.githubusercontent.com/immortalwrt/immortalwrt/openwrt-24.10/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh"
+fi
+mkdir -p "$(dirname "${legacy_platform}")"
+
+awk '
+  $0 == "platform_do_upgrade() {" {
+    in_upgrade = 1
+  }
+  in_upgrade && !inserted && $0 ~ /^[[:space:]]*case "\$board" in$/ {
+    print
+    print "\tqihoo,360t7)"
+    print "\t\tCI_UBIPART=\"ubi\""
+    print "\t\tCI_KERNPART=\"kernel\""
+    print "\t\tCI_ROOTPART=\"rootfs\""
+    print "\t\tnand_do_upgrade \"$1\""
+    print "\t\t;;"
+    inserted = 1
+    next
+  }
+  in_upgrade && $0 ~ /^[[:space:]]*qihoo,360t7\|\\$/ {
+    removed = 1
+    next
+  }
+  { print }
+  END {
+    if (!inserted || !removed) {
+      exit 1
+    }
+  }
+' "${legacy_platform_source}" >"${legacy_platform}"
+
+grep -Fq $'\tqihoo,360t7)' "${legacy_platform}"
+if grep -Fq $'\tqihoo,360t7|\\' "${legacy_platform}"; then
+  echo "The FIT-volume 360T7 upgrade branch was not removed." >&2
+  exit 1
+fi
+
+echo "Building the rootfs variant dedicated to the legacy U-Boot layout..."
+make -C "${imagebuilder_dir}" image \
+  PROFILE="${PROFILE}" \
+  PACKAGES="daed luci-app-daede vmlinux-btf" \
+  DISABLED_SERVICES="daed" \
+  FILES="${legacy_files}"
+
+shopt -s nullglob
+legacy_source_images=(
+  "${imagebuilder_dir}"/bin/targets/mediatek/filogic/*qihoo_360t7*squashfs-sysupgrade.itb
+)
+shopt -u nullglob
+if [[ "${#legacy_source_images[@]}" -ne 1 ]]; then
+  echo "Expected one temporary 360T7 FIT for U-Boot Web conversion." >&2
+  exit 1
+fi
+
+legacy_metadata="${WORK_DIR}/legacy.metadata.json"
+"${fwtool}" -i "${legacy_metadata}" "${legacy_source_images[0]}"
+jq -e '
+  .supported_devices | index("qihoo,360t7") != null
+' "${legacy_metadata}" >/dev/null
+
+uboot_web_name="${firmware_name%.itb}-uboot-web.bin"
+bash "${ROOT_DIR}/scripts/make-uboot-web.sh" \
+  "${imagebuilder_dir}" \
+  "${legacy_source_images[0]}" \
+  "${DIST_DIR}/${uboot_web_name}" \
+  "${kernel_version}" \
+  "${legacy_metadata}"
+(
+  cd "${DIST_DIR}"
+  sha256sum -- "${uboot_web_name}" >"${uboot_web_name}.sha256"
 )
 
 cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
@@ -348,6 +430,12 @@ The initramfs recovery image is the checksum-verified upstream image matching
 this ImageBuilder revision. It runs from RAM and intentionally does not contain
 daed. Boot it first when recovering through U-Boot, then flash the dedicated
 sysupgrade image from the recovery system.
+
+The \`*-uboot-web.bin\` asset is only for the Qihoo 360T7 U-Boot Web updater
+that accepts a sysupgrade tar containing separate \`kernel\` and \`root\`
+members. It is generated from the same ImageBuilder kernel and rootfs as this
+Release, but uses the legacy 360T7 UBI volume layout expected by that updater.
+Do not rename or upload the combined \`.itb\` file to the U-Boot Web page.
 
 The build fails instead of publishing when the daed Release does not contain a
 BTF package matching both the ImageBuilder kernel version and package architecture.

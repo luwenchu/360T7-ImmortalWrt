@@ -35,6 +35,7 @@ Release 会更新原有资产，不创建其他机型产物。
 构建成功后可从 Actions artifact 或仓库 Releases 下载：
 
 - `*qihoo_360t7*sysupgrade.itb`
+- `*qihoo_360t7*-uboot-web.bin`
 - 同一 ImageBuilder 版本的 `*qihoo_360t7*initramfs-recovery.itb`
 - 对应包清单、固件元数据和 SHA-256 校验文件
 - 外部 daed/BTF IPK 的 SHA-256 清单
@@ -53,9 +54,13 @@ chmod +x scripts/build.sh
 
 ## 正确刷写入口
 
-不要把 `squashfs-sysupgrade.itb` 上传到 U-Boot 自身的 Web 更新页面；
-该页面会按 U-Boot 的固件格式规则拒绝 sysupgrade 文件，改成 `.bin`
-后缀也不会改变内部格式。
+U-Boot 自身的 **Firmware update** 页面只使用文件名以
+`-uboot-web.bin` 结尾的专用镜像。该镜像是包含 `CONTROL`、独立
+`kernel` 和 `root` 的 sysupgrade tar，使用该 U-Boot 所需的旧式
+`kernel`/`rootfs` UBI 卷布局。
+
+不要把 `squashfs-sysupgrade.itb` 上传到 U-Boot Web 页面，也不要通过
+改后缀或手工重新打包来代替专用 `-uboot-web.bin`。
 
 如果现有 ImmortalWrt 可以正常启动，直接在 LuCI 的“备份/升级”页面
 上传 `squashfs-sysupgrade.itb`，或者通过 SSH 执行：
@@ -64,9 +69,9 @@ chmod +x scripts/build.sh
 sysupgrade -n /tmp/immortalwrt-*-qihoo_360t7-*-squashfs-sysupgrade.itb
 ```
 
-如果只能进入 U-Boot，先通过 U-Boot/TFTP 启动 Release 中的
-`initramfs-recovery.itb`。某些 360T7 U-Boot 固定请求以下文件名，
-部署到 TFTP 根目录前需要重命名：
+如果 U-Boot Web 页面拒绝专用 `-uboot-web.bin`，不要强制写入。此时
+改用 U-Boot/TFTP 启动 Release 中的 `initramfs-recovery.itb`。某些
+360T7 U-Boot 固定请求以下文件名，部署到 TFTP 根目录前需要重命名：
 
 ```text
 openwrt-mediatek-filogic-qihoo_360t7-initramfs-recovery.itb
@@ -78,7 +83,8 @@ openwrt-mediatek-filogic-qihoo_360t7-initramfs-recovery.itb
 
 ## 刷写限制
 
-只允许在 Qihoo 360T7 上通过 sysupgrade 使用本仓库生成的镜像。
-刷写前必须校验 SHA-256，并确认文件名包含
+只允许在 Qihoo 360T7 上使用本仓库生成的镜像。U-Boot Web 仅使用
+`-uboot-web.bin`，LuCI/SSH sysupgrade 仅使用 `.itb`。刷写前必须校验
+SHA-256，并确认文件名包含
 `mediatek-filogic-qihoo_360t7`。不要在其他型号或其他分区布局的设备上
 尝试刷写。

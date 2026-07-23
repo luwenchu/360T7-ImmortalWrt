@@ -79,6 +79,7 @@ jobs:
           body_path: dist/RELEASE_NOTES.md
           files: |
             dist/*.itb
+            dist/*.bin
             dist/*.manifest
             dist/*.json
             dist/*.sha256
