@@ -11,6 +11,7 @@ on:
       - ".github/workflows/build-360t7-imagebuilder.yml"
       - "scripts/build.sh"
       - "files/**"
+      - "packages/**"
 
 permissions:
   contents: write

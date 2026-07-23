@@ -9,7 +9,7 @@ ARCH="aarch64_cortex-a53"
 IMMORTALWRT_ROOT="${IMMORTALWRT_ROOT:-https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/targets/mediatek/filogic}"
 DAED_REPOSITORY="${DAED_REPOSITORY:-kenzok8/openwrt-daede}"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
-IMAGE_PACKAGES="daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn"
+IMAGE_PACKAGES="daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -18,7 +18,7 @@ require_command() {
   }
 }
 
-for command_name in curl jq sha256sum tar zstd make find realpath od; do
+for command_name in curl jq sha256sum tar zstd make find realpath od du; do
   require_command "${command_name}"
 done
 
@@ -184,6 +184,48 @@ package_version() {
     awk -F ': ' '$1 == "Version" { print $2; exit }'
 }
 
+build_local_package() {
+  local package_source="$1"
+  local package_name="$2"
+  local output_dir="$3"
+  local package_work="${WORK_DIR}/local-package-${package_name}"
+  local installed_size
+  local version
+
+  rm -rf "${package_work}"
+  mkdir -p "${package_work}/outer" "${package_work}/control" "${package_work}/data"
+  cp -a "${package_source}/data/." "${package_work}/data/"
+  installed_size="$(du -sb "${package_work}/data" | awk '{ print $1 }')"
+  sed "s/@INSTALLED_SIZE@/${installed_size}/" \
+    "${package_source}/control/control" >"${package_work}/control/control"
+  version="$(
+    awk -F ': ' '$1 == "Version" { print $2; exit }' \
+      "${package_work}/control/control"
+  )"
+  if [[ -z "${version}" ]]; then
+    echo "Could not read the local package version for ${package_name}." >&2
+    exit 1
+  fi
+
+  chmod 0755 \
+    "${package_work}/data/etc/uci-defaults/95-360t7-hwaccel" \
+    "${package_work}/data/usr/libexec/360t7-hwaccel-status"
+  printf '2.0\n' >"${package_work}/outer/debian-binary"
+  tar --create --gzip \
+    --owner=0 --group=0 --numeric-owner \
+    --file "${package_work}/outer/control.tar.gz" \
+    --directory "${package_work}/control" .
+  tar --create --gzip \
+    --owner=0 --group=0 --numeric-owner \
+    --file "${package_work}/outer/data.tar.gz" \
+    --directory "${package_work}/data" .
+  tar --create --gzip \
+    --owner=0 --group=0 --numeric-owner \
+    --file "${output_dir}/${package_name}_${version}_all.ipk" \
+    --directory "${package_work}/outer" \
+    ./debian-binary ./control.tar.gz ./data.tar.gz
+}
+
 daed_version="$(
   package_version "${WORK_DIR}/external-packages/${daed_asset}"
 )"
@@ -250,6 +292,26 @@ tar --create --gzip \
   ./debian-binary ./control.tar.gz ./data.tar.gz
 
 cp "${patched_packages}"/*.ipk "${imagebuilder_dir}/packages/"
+build_local_package \
+  "${ROOT_DIR}/packages/luci-app-360t7-hwaccel" \
+  "luci-app-360t7-hwaccel" \
+  "${patched_packages}"
+shopt -s nullglob
+hwaccel_packages=(
+  "${patched_packages}"/luci-app-360t7-hwaccel_*.ipk
+)
+shopt -u nullglob
+if [[ "${#hwaccel_packages[@]}" -ne 1 ]]; then
+  echo "Expected exactly one locally built 360T7 hardware acceleration package." >&2
+  exit 1
+fi
+hwaccel_package="${hwaccel_packages[0]}"
+hwaccel_version="$(package_version "${hwaccel_package}")"
+if [[ -z "${hwaccel_version}" ]]; then
+  echo "Could not read the 360T7 hardware acceleration package version." >&2
+  exit 1
+fi
+cp "${hwaccel_package}" "${imagebuilder_dir}/packages/"
 
 echo "Building the dedicated ${PROFILE} image..."
 if make -C "${imagebuilder_dir}" image \
@@ -304,8 +366,13 @@ declare -A required_versions=(
   [daed]="${daed_version}"
   [luci-app-daede]="${luci_version}"
   [vmlinux-btf]="${btf_version}"
+  [luci-app-360t7-hwaccel]="${hwaccel_version}"
 )
-for required_package in daed luci-app-daede vmlinux-btf; do
+for required_package in \
+  daed \
+  luci-app-daede \
+  vmlinux-btf \
+  luci-app-360t7-hwaccel; do
   expected_manifest_line="${required_package} - ${required_versions[$required_package]}"
   if ! grep -Fxq "${expected_manifest_line}" \
     "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
@@ -321,7 +388,8 @@ for required_package in \
   openvpn-openssl \
   openvpn-easy-rsa \
   luci-app-openvpn-server \
-  luci-i18n-openvpn-server-zh-cn; do
+  luci-i18n-openvpn-server-zh-cn \
+  kmod-nft-offload; do
   if ! grep -q "^${required_package} - " \
     "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
     echo "Expected ${required_package} in the generated image manifest." >&2
@@ -461,6 +529,9 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - OpenVPN server: \`luci-app-openvpn-server\` with Chinese translation,
   port/protocol settings, client push directives, certificate generation and
   downloadable \`.ovpn\` client configuration
+- 360T7 hardware acceleration: \`luci-app-360t7-hwaccel\` and
+  \`kmod-nft-offload\`, with dedicated LuCI controls for MediaTek PPE hardware
+  flow offloading
 - Default LAN address on a clean installation: \`192.168.233.1\`
 
 The initramfs recovery image is the checksum-verified upstream image matching
