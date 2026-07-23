@@ -26,6 +26,9 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - 集成专用 `luci-app-openvpn-server` 和简体中文翻译，可设置服务端端口、
   TCP/UDP 与 IPv4/IPv6 协议、客户端网段和 push 指令，并可生成证书及
   下载内嵌证书的 `.ovpn` 客户端配置。
+- 集成专用 `luci-app-360t7-hwaccel` 和 `kmod-nft-offload`，在 LuCI
+  “网络”菜单中控制软件流量分载与 MediaTek PPE 硬件流量分载；全新安装
+  默认开启这两项，使用 SQM/QoS 或需要逐包处理的策略路由时应关闭。
 - 不安装普通 `luci-app-openvpn`，也不安装 `mwan3` 及其 LuCI/翻译包。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。
 - 上游 ImageBuilder 即使完成 FIT 和校验和也可能返回非零；工作流不以该

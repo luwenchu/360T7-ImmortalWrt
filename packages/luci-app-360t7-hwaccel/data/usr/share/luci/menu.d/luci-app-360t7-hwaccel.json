@@ -1,0 +1,15 @@
+{
+	"admin/network/360t7-hwaccel": {
+		"action": {
+			"type": "view",
+			"path": "network/360t7-hwaccel"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-360t7-hwaccel"
+			]
+		},
+		"order": 65,
+		"title": "360T7 Hardware Acceleration"
+	}
+}

@@ -1,0 +1,19 @@
+#!/bin/sh
+
+board="$(cat /tmp/sysinfo/board_name 2>/dev/null)"
+software="$(uci -q get firewall.@defaults[0].flow_offloading)"
+hardware="$(uci -q get firewall.@defaults[0].flow_offloading_hw)"
+
+[ -d /sys/module/nft_flow_offload ] && module_loaded=true || module_loaded=false
+if nft list flowtables 2>/dev/null | grep -q 'flags offload'; then
+	hardware_active=true
+else
+	hardware_active=false
+fi
+
+printf '{"board":"%s","software_enabled":%s,"hardware_enabled":%s,"module_loaded":%s,"hardware_active":%s}\n' \
+	"${board:-unknown}" \
+	"$([ "${software}" = 1 ] && echo true || echo false)" \
+	"$([ "${hardware}" = 1 ] && echo true || echo false)" \
+	"${module_loaded}" \
+	"${hardware_active}"
