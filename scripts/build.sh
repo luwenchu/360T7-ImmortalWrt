@@ -17,7 +17,7 @@ require_command() {
   }
 }
 
-for command_name in curl jq sha256sum tar zstd make find; do
+for command_name in ar curl jq sha256sum tar zstd make find; do
   require_command "${command_name}"
 done
 
@@ -152,11 +152,26 @@ cp "${WORK_DIR}"/external-packages/*.ipk "${imagebuilder_dir}/packages/"
   sha256sum -- *.ipk >"${DIST_DIR}/external-packages.sha256"
 )
 
+custom_files="${WORK_DIR}/custom-files"
+mkdir -p "${custom_files}"
+cp -a "${ROOT_DIR}/files/." "${custom_files}/"
+
+# The current daed IPK contains cleanup.sh, but the ImageBuilder finalization
+# phase can lose it before the init script is evaluated. Restore the exact file
+# from the selected Release package rather than maintaining a divergent copy.
+ar p "${WORK_DIR}/external-packages/${daed_asset}" data.tar.gz |
+  tar --extract --gzip --file - --directory "${custom_files}" \
+    ./usr/share/daed/cleanup.sh
+if [[ ! -s "${custom_files}/usr/share/daed/cleanup.sh" ]]; then
+  echo "Could not restore daed cleanup.sh from ${daed_asset}." >&2
+  exit 1
+fi
+
 echo "Building the dedicated ${PROFILE} image..."
 make -C "${imagebuilder_dir}" image \
   PROFILE="${PROFILE}" \
   PACKAGES="daed luci-app-daede vmlinux-btf" \
-  FILES="${ROOT_DIR}/files"
+  FILES="${custom_files}"
 
 mapfile -t sysupgrade_images < <(
   find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
