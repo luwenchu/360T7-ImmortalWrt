@@ -198,17 +198,21 @@ tar --create \
 cp "${patched_packages}"/*.ipk "${imagebuilder_dir}/packages/"
 
 echo "Building the dedicated ${PROFILE} image..."
-imagebuilder_status=0
-make -C "${imagebuilder_dir}" image \
-  PROFILE="${PROFILE}" \
-  PACKAGES="daed luci-app-daede vmlinux-btf" \
-  DISABLED_SERVICES="daed" \
-  FILES="${ROOT_DIR}/files" ||
+if make -C "${imagebuilder_dir}" image \
+    PROFILE="${PROFILE}" \
+    PACKAGES="daed luci-app-daede vmlinux-btf" \
+    DISABLED_SERVICES="daed" \
+    FILES="${ROOT_DIR}/files"; then
+  imagebuilder_status=0
+else
   imagebuilder_status=$?
+fi
+echo "ImageBuilder command status: ${imagebuilder_status}"
 if [[ "${imagebuilder_status}" -ne 0 ]]; then
   echo "ImageBuilder returned ${imagebuilder_status}; validating generated output before deciding failure."
 fi
 
+echo "Locating the dedicated 360T7 sysupgrade image..."
 mapfile -t sysupgrade_images < <(
   find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
     -maxdepth 1 -type f \
