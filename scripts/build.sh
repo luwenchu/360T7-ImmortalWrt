@@ -17,7 +17,7 @@ require_command() {
   }
 }
 
-for command_name in ar curl jq sha256sum tar zstd make find; do
+for command_name in curl jq sha256sum tar zstd make find; do
   require_command "${command_name}"
 done
 
@@ -159,7 +159,8 @@ cp -a "${ROOT_DIR}/files/." "${custom_files}/"
 # The current daed IPK contains cleanup.sh, but the ImageBuilder finalization
 # phase can lose it before the init script is evaluated. Restore the exact file
 # from the selected Release package rather than maintaining a divergent copy.
-ar p "${WORK_DIR}/external-packages/${daed_asset}" data.tar.gz |
+tar --extract --to-stdout \
+  --file "${WORK_DIR}/external-packages/${daed_asset}" ./data.tar.gz |
   tar --extract --gzip --file - --directory "${custom_files}" \
     ./usr/share/daed/cleanup.sh
 if [[ ! -s "${custom_files}/usr/share/daed/cleanup.sh" ]]; then
