@@ -21,8 +21,11 @@ for command_name in curl jq sha256sum tar zstd make find; do
   require_command "${command_name}"
 done
 
-rm -rf "${WORK_DIR}" "${DIST_DIR}"
-mkdir -p "${WORK_DIR}/downloads" "${WORK_DIR}/external-packages" "${DIST_DIR}"
+mkdir -p "${WORK_DIR}/downloads"
+find "${WORK_DIR}" -mindepth 1 -maxdepth 1 \
+  ! -name downloads -exec rm -rf -- {} +
+rm -rf "${DIST_DIR}"
+mkdir -p "${WORK_DIR}/external-packages" "${DIST_DIR}"
 
 download() {
   local url="$1"
@@ -70,10 +73,17 @@ if [[ ! "${expected_ib_sha256}" =~ ^[0-9a-f]{64}$ ]]; then
 fi
 
 echo "Downloading ${IMAGEBUILDER_FILE}..."
-curl --fail --location --retry 4 --retry-all-errors \
-  --connect-timeout 20 --max-time 3600 \
-  --output "${WORK_DIR}/downloads/${IMAGEBUILDER_FILE}" \
-  "${IMMORTALWRT_ROOT}/${IMAGEBUILDER_FILE}"
+imagebuilder_archive="${WORK_DIR}/downloads/${IMAGEBUILDER_FILE}"
+if echo "${expected_ib_sha256}  ${imagebuilder_archive}" |
+  sha256sum --check --status - 2>/dev/null; then
+  echo "Using the cached, checksum-verified ImageBuilder archive."
+else
+  rm -f "${imagebuilder_archive}"
+  curl --fail --location --retry 4 --retry-all-errors \
+    --connect-timeout 20 --max-time 3600 \
+    --output "${imagebuilder_archive}" \
+    "${IMMORTALWRT_ROOT}/${IMAGEBUILDER_FILE}"
+fi
 echo "${expected_ib_sha256}  ${WORK_DIR}/downloads/${IMAGEBUILDER_FILE}" |
   sha256sum --check -
 
@@ -215,11 +225,11 @@ fi
 echo "Locating the dedicated 360T7 sysupgrade image..."
 find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
   -maxdepth 1 -type f -printf 'Generated: %f\n'
-mapfile -t sysupgrade_images < <(
-  find "${imagebuilder_dir}/bin/targets/mediatek/filogic" \
-    -maxdepth 1 -type f \
-    -name '*qihoo_360t7*squashfs-sysupgrade.itb' -print
-) || true
+shopt -s nullglob
+sysupgrade_images=(
+  "${imagebuilder_dir}"/bin/targets/mediatek/filogic/*qihoo_360t7*squashfs-sysupgrade.itb
+)
+shopt -u nullglob
 if [[ "${#sysupgrade_images[@]}" -ne 1 ]]; then
   echo "Expected exactly one qihoo_360t7 sysupgrade image; found ${#sysupgrade_images[@]}." >&2
   exit 1
@@ -256,7 +266,8 @@ done
 metadata_file="${DIST_DIR}/${firmware_name%.itb}.metadata.json"
 fwtool="${imagebuilder_dir}/staging_dir/host/bin/fwtool"
 if [[ -x "${fwtool}" ]]; then
-  "${fwtool}" -I "${metadata_file}" "${DIST_DIR}/${firmware_name}"
+  echo "Extracting and validating firmware metadata..."
+  "${fwtool}" -i "${metadata_file}" "${DIST_DIR}/${firmware_name}"
   jq -e '
     .supported_devices | index("qihoo,360t7") != null
   ' "${metadata_file}" >/dev/null

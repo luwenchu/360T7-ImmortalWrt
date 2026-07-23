@@ -40,6 +40,23 @@ jobs:
             build-essential ca-certificates curl file gawk gettext jq \
             libncurses-dev python3 rsync unzip zstd
 
+      - name: Resolve ImageBuilder cache key
+        id: imagebuilder
+        run: |
+          filename="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
+          checksum="$(
+            curl --fail --location --retry 4 "${IMMORTALWRT_ROOT}/sha256sums" |
+              awk -v file="${filename}" '$2 == "*" file { print $1 }'
+          )"
+          [[ "${checksum}" =~ ^[0-9a-f]{64}$ ]]
+          echo "sha256=${checksum}" >>"${GITHUB_OUTPUT}"
+
+      - name: Cache verified ImageBuilder archive
+        uses: actions/cache@v4
+        with:
+          path: work/downloads
+          key: imagebuilder-${{ runner.os }}-${{ steps.imagebuilder.outputs.sha256 }}
+
       - name: Build qihoo_360t7 sysupgrade image
         id: build
         env:
