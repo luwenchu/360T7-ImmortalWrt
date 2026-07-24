@@ -1,4 +1,5 @@
 /dist/
+/firmware/
 /work/
 /.cache/
 /*sysupgrade.itb
