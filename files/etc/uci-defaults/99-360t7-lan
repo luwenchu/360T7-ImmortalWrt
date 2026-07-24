@@ -1,7 +1,18 @@
 #!/bin/sh
 
-uci -q set network.lan.ipaddr='192.168.233.1'
+uci -q set network.lan.ipaddr='192.168.1.1'
+uci -q set network.lan.ip6assign='60'
+uci -q set network.wan6='interface'
+uci -q set network.wan6.proto='dhcpv6'
+uci -q set network.wan6.device='@wan'
+uci -q set network.wan6.reqaddress='try'
+uci -q set network.wan6.reqprefix='auto'
 uci -q commit network
 
-exit 0
+uci -q set dhcp.lan.ra='server'
+uci -q set dhcp.lan.dhcpv6='server'
+uci -q set dhcp.lan.ndp='disabled'
+uci -q set dhcp.lan.ra_management='1'
+uci -q commit dhcp
 
+exit 0

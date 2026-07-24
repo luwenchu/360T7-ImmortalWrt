@@ -1,6 +1,6 @@
 {
 	"luci-app-360t7-hwaccel": {
-		"description": "Grant access to the 360T7 hardware acceleration settings",
+		"description": "允许访问 360T7 硬件加速设置",
 		"read": {
 			"file": {
 				"/usr/libexec/360t7-hwaccel-status": [

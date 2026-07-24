@@ -3,6 +3,7 @@
 board="$(cat /tmp/sysinfo/board_name 2>/dev/null)"
 software="$(uci -q get firewall.@defaults[0].flow_offloading)"
 hardware="$(uci -q get firewall.@defaults[0].flow_offloading_hw)"
+ipv6_forwarding="$(cat /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null)"
 
 [ -d /sys/module/nft_flow_offload ] && module_loaded=true || module_loaded=false
 if nft list flowtables 2>/dev/null | grep -q 'flags offload'; then
@@ -11,9 +12,10 @@ else
 	hardware_active=false
 fi
 
-printf '{"board":"%s","software_enabled":%s,"hardware_enabled":%s,"module_loaded":%s,"hardware_active":%s}\n' \
+printf '{"board":"%s","software_enabled":%s,"hardware_enabled":%s,"module_loaded":%s,"hardware_active":%s,"ipv6_forwarding":%s}\n' \
 	"${board:-unknown}" \
 	"$([ "${software}" = 1 ] && echo true || echo false)" \
 	"$([ "${hardware}" = 1 ] && echo true || echo false)" \
 	"${module_loaded}" \
-	"${hardware_active}"
+	"${hardware_active}" \
+	"$([ "${ipv6_forwarding}" = 1 ] && echo true || echo false)"

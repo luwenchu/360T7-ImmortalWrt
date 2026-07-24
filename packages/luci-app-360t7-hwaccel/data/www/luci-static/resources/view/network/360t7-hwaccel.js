@@ -17,11 +17,11 @@ return view.extend({
 	render: function(status) {
 		var map = new form.Map(
 			'firewall',
-			_('360T7 Hardware Acceleration'),
-			_('Controls the MediaTek PPE hardware flow offload used by the Qihoo 360T7. ' +
-			  'Disable offloading when using SQM/QoS or policy routing that must inspect every packet.')
+			_('360T7 硬件加速'),
+			_('控制 Qihoo 360T7 的 MediaTek PPE IPv4/IPv6 硬件流量分载。' +
+			  '使用 SQM、QoS 或需要逐包检查的策略路由时，请关闭流量分载。')
 		);
-		var section = map.section(form.TypedSection, 'defaults', _('Acceleration settings'));
+		var section = map.section(form.TypedSection, 'defaults', _('加速设置'));
 		var option;
 
 		section.anonymous = true;
@@ -30,33 +30,37 @@ return view.extend({
 		option = section.option(
 			form.Flag,
 			'flow_offloading',
-			_('Software flow offloading'),
-			_('Offload established flows through the kernel flow table.')
+			_('软件流量分载'),
+			_('通过内核流表加速已经建立的 IPv4 和 IPv6 连接。')
 		);
 		option.rmempty = false;
 
 		option = section.option(
 			form.Flag,
 			'flow_offloading_hw',
-			_('Hardware flow offloading'),
-			_('Send eligible flows to the MediaTek packet processing engine.')
+			_('硬件流量分载（IPv4/IPv6）'),
+			_('将符合条件的 IPv4 和 IPv6 流量交给 MediaTek PPE 硬件处理。')
 		);
 		option.depends('flow_offloading', '1');
 		option.rmempty = false;
 
 		var state = status.hardware_active
-			? _('Active')
-			: (status.hardware_enabled ? _('Enabled, waiting for eligible traffic') : _('Disabled'));
+			? _('运行中')
+			: (status.hardware_enabled ? _('已启用，等待符合条件的流量') : _('已禁用'));
 		var details = E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('Runtime status')),
+			E('h3', {}, _('运行状态')),
 			E('p', {}, [
-				E('strong', {}, _('Hardware offload: ')),
+				E('strong', {}, _('硬件流量分载：')),
 				state
 			]),
+			E('p', {}, [
+				E('strong', {}, _('IPv6 转发：')),
+				status.ipv6_forwarding ? _('已启用') : _('未启用')
+			]),
 			E('p', { 'class': 'cbi-map-descr' },
-				_('Board: %s; nft flow-offload module: %s').format(
-					status.board || _('unknown'),
-					status.module_loaded ? _('loaded') : _('not loaded')
+				_('设备：%s；nft 流量分载模块：%s').format(
+					status.board || _('未知'),
+					status.module_loaded ? _('已加载') : _('未加载')
 				)
 			)
 		]);

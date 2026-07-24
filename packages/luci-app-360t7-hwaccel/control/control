@@ -1,9 +1,9 @@
 Package: luci-app-360t7-hwaccel
-Version: 1.0.0-r1
+Version: 1.1.0-r1
 Depends: libc, luci-base, firewall4, kmod-nft-offload
 Architecture: all
 Maintainer: 360T7 ImmortalWrt
 Section: luci
 Priority: optional
 Installed-Size: @INSTALLED_SIZE@
-Description: Dedicated LuCI controls for MediaTek hardware flow offloading on Qihoo 360T7.
+Description: Qihoo 360T7 MediaTek IPv4 and IPv6 hardware flow offloading controls.

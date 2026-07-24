@@ -12,8 +12,8 @@ SSR_PLUS_REPOSITORY="${SSR_PLUS_REPOSITORY:-fw876/helloworld}"
 OPENCLASH_REPOSITORY="${OPENCLASH_REPOSITORY:-vernesong/OpenClash}"
 MOSDNS_REPOSITORY="${MOSDNS_REPOSITORY:-sbwml/luci-app-mosdns}"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
-IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn"
-DISABLED_SERVICES="daed shadowsocksr openclash mosdns"
+IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
+DISABLED_SERVICES="daed shadowsocksr openclash mosdns ddns-go"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -596,7 +596,12 @@ for required_package in \
   openvpn-easy-rsa \
   luci-app-openvpn-server \
   luci-i18n-openvpn-server-zh-cn \
+  ddns-go \
+  luci-app-ddns-go \
+  luci-i18n-ddns-go-zh-cn \
   kmod-nft-offload \
+  odhcp6c \
+  odhcpd-ipv6only \
   bash \
   ca-bundle \
   coreutils \
@@ -764,9 +769,11 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - OpenVPN server: \`luci-app-openvpn-server\` with Chinese translation,
   port/protocol settings, client push directives, certificate generation and
   downloadable \`.ovpn\` client configuration
+- DDNS-GO: \`ddns-go\`, \`luci-app-ddns-go\` and its Chinese translation;
+  the service remains disabled until account and domain settings are configured
 - 360T7 hardware acceleration: \`luci-app-360t7-hwaccel\` and
-  \`kmod-nft-offload\`, with dedicated LuCI controls for MediaTek PPE hardware
-  flow offloading
+  \`kmod-nft-offload\`, with a Chinese LuCI page for MediaTek PPE IPv4/IPv6
+  hardware flow offloading
 - SSR Plus+ Release: \`${ssr_tag}\` / \`luci-app-ssr-plus\`
 - OpenClash Release: \`${openclash_tag}\` / \`luci-app-openclash\`
 - MosDNS Release: \`${mosdns_tag}\` / \`luci-app-mosdns\`,
@@ -774,7 +781,8 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   use the current ImmortalWrt feed versions
 - Proxy and DNS services remain disabled until they are configured, preventing
   daed, SSR Plus+, OpenClash and MosDNS from competing for traffic on first boot
-- Default LAN address on a clean installation: \`192.168.233.1\`
+- IPv6: DHCPv6 client on WAN, a delegated \`/60\` on LAN, and LAN RA/DHCPv6
+- Default LAN address on a clean installation: \`192.168.1.1\`
 
 The initramfs recovery image is the checksum-verified upstream image matching
 this ImageBuilder revision. It runs from RAM and intentionally does not contain
