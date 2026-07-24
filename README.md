@@ -37,8 +37,8 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   固件中预装其 LuCI 与全部硬依赖。
 - 从 `sbwml/luci-app-mosdns` 的当前最新 Release 下载与
   `OpenWrt 24.10`、`aarch64_cortex-a53` 精确匹配的包组，集成
-  `luci-app-mosdns`、简体中文翻译、`mosdns`、`v2dat`、
-  `v2ray-geoip` 和 `v2ray-geosite`。
+  `luci-app-mosdns`、简体中文翻译、`mosdns` 和 `v2dat`；规则数据库
+  `v2ray-geoip`、`v2ray-geosite` 使用当前 ImmortalWrt 源版本。
 - daed、SSR Plus+、OpenClash 和 MosDNS 服务均保持默认禁用。请按实际
   网络方案选择并配置，避免多个透明代理或 DNS 服务同时接管流量。
 - 不安装普通 `luci-app-openvpn`，也不安装 `mwan3` 及其 LuCI/翻译包。

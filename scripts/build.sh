@@ -436,7 +436,17 @@ done
 patched_packages="${WORK_DIR}/patched-packages"
 repack_dir="${WORK_DIR}/daed-repack"
 mkdir -p "${patched_packages}" "${repack_dir}/outer" "${repack_dir}/data"
-cp "${WORK_DIR}/external-packages/"*.ipk "${patched_packages}/"
+for external_package in "${WORK_DIR}/external-packages/"*.ipk; do
+  external_package_name="$(package_field "${external_package}" Package)"
+  case "${external_package_name}" in
+    v2ray-geoip | v2ray-geosite)
+      # Prefer the newer rule databases from the current ImmortalWrt feed.
+      ;;
+    *)
+      cp "${external_package}" "${patched_packages}/"
+      ;;
+  esac
+done
 
 # During ImageBuilder finalization, init scripts run from the target rootfs but
 # outside chroot. The upstream daed init script sources an absolute target path,
@@ -558,8 +568,6 @@ declare -A required_versions=(
   [luci-i18n-mosdns-zh-cn]="${mosdns_i18n_version}"
   [mosdns]="${mosdns_version}"
   [v2dat]="${v2dat_version}"
-  [v2ray-geoip]="${v2ray_geoip_version}"
-  [v2ray-geosite]="${v2ray_geosite_version}"
 )
 for required_package in \
   daed \
@@ -571,9 +579,7 @@ for required_package in \
   luci-app-mosdns \
   luci-i18n-mosdns-zh-cn \
   mosdns \
-  v2dat \
-  v2ray-geoip \
-  v2ray-geosite; do
+  v2dat; do
   expected_manifest_line="${required_package} - ${required_versions[$required_package]}"
   if ! grep -Fxq "${expected_manifest_line}" \
     "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
@@ -614,6 +620,8 @@ for required_package in \
   ruby \
   ruby-yaml \
   unzip \
+  v2ray-geoip \
+  v2ray-geosite \
   xz \
   xz-utils; do
   if ! grep -q "^${required_package} - " \
@@ -762,7 +770,8 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - SSR Plus+ Release: \`${ssr_tag}\` / \`luci-app-ssr-plus\`
 - OpenClash Release: \`${openclash_tag}\` / \`luci-app-openclash\`
 - MosDNS Release: \`${mosdns_tag}\` / \`luci-app-mosdns\`,
-  \`luci-i18n-mosdns-zh-cn\`, matching \`mosdns\`, \`v2dat\` and rule data
+  \`luci-i18n-mosdns-zh-cn\`, matching \`mosdns\` and \`v2dat\`; rule databases
+  use the current ImmortalWrt feed versions
 - Proxy and DNS services remain disabled until they are configured, preventing
   daed, SSR Plus+, OpenClash and MosDNS from competing for traffic on first boot
 - Default LAN address on a clean installation: \`192.168.233.1\`
