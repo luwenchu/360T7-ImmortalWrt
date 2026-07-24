@@ -24,6 +24,9 @@ env:
   TZ: Asia/Shanghai
   IMMORTALWRT_ROOT: https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/targets/mediatek/filogic
   DAED_REPOSITORY: kenzok8/openwrt-daede
+  SSR_PLUS_REPOSITORY: fw876/helloworld
+  OPENCLASH_REPOSITORY: vernesong/OpenClash
+  MOSDNS_REPOSITORY: sbwml/luci-app-mosdns
 
 jobs:
   build:

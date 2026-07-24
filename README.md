@@ -29,6 +29,18 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - 集成专用 `luci-app-360t7-hwaccel` 和 `kmod-nft-offload`，在 LuCI
   “网络”菜单中控制软件流量分载与 MediaTek PPE 硬件流量分载；全新安装
   默认开启这两项，使用 SQM/QoS 或需要逐包处理的策略路由时应关闭。
+- 从 `fw876/helloworld` 的当前最新 Release 集成
+  `luci-app-ssr-plus`，并校验其全部运行依赖已进入固件。代理核心由
+  SSR Plus+ 的组件更新页面按需安装，避免内置错误架构或过期核心。
+- 从 `vernesong/OpenClash` 的当前最新 Release 集成
+  `luci-app-openclash`。OpenClash 核心由插件的核心管理页面按需下载，
+  固件中预装其 LuCI 与全部硬依赖。
+- 从 `sbwml/luci-app-mosdns` 的当前最新 Release 下载与
+  `OpenWrt 24.10`、`aarch64_cortex-a53` 精确匹配的包组，集成
+  `luci-app-mosdns`、简体中文翻译、`mosdns`、`v2dat`、
+  `v2ray-geoip` 和 `v2ray-geosite`。
+- daed、SSR Plus+、OpenClash 和 MosDNS 服务均保持默认禁用。请按实际
+  网络方案选择并配置，避免多个透明代理或 DNS 服务同时接管流量。
 - 不安装普通 `luci-app-openvpn`，也不安装 `mwan3` 及其 LuCI/翻译包。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。
 - 上游 ImageBuilder 即使完成 FIT 和校验和也可能返回非零；工作流不以该
@@ -48,7 +60,7 @@ Release 会更新原有资产，不创建其他机型产物。
 - `*qihoo_360t7*-uboot-web.bin`
 - 同一 ImageBuilder 版本的 `*qihoo_360t7*initramfs-recovery.itb`
 - 对应包清单、固件元数据和 SHA-256 校验文件
-- 外部 daed/BTF IPK 的 SHA-256 清单
+- 外部 daed/BTF、SSR Plus+、OpenClash 和 MosDNS IPK 的 SHA-256 清单
 
 ## 本地 Linux 构建
 

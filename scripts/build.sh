@@ -8,8 +8,12 @@ PROFILE="qihoo_360t7"
 ARCH="aarch64_cortex-a53"
 IMMORTALWRT_ROOT="${IMMORTALWRT_ROOT:-https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/targets/mediatek/filogic}"
 DAED_REPOSITORY="${DAED_REPOSITORY:-kenzok8/openwrt-daede}"
+SSR_PLUS_REPOSITORY="${SSR_PLUS_REPOSITORY:-fw876/helloworld}"
+OPENCLASH_REPOSITORY="${OPENCLASH_REPOSITORY:-vernesong/OpenClash}"
+MOSDNS_REPOSITORY="${MOSDNS_REPOSITORY:-sbwml/luci-app-mosdns}"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
-IMAGE_PACKAGES="daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload"
+IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn"
+DISABLED_SERVICES="daed shadowsocksr openclash mosdns"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -39,6 +43,61 @@ download() {
     curl_args+=(--header "Authorization: Bearer ${GITHUB_TOKEN}")
   fi
   curl "${curl_args[@]}" --output "${output}" "${url}"
+}
+
+github_api_args=(
+  --fail --location --retry 4 --retry-all-errors
+  --header "Accept: application/vnd.github+json"
+  --header "X-GitHub-Api-Version: 2022-11-28"
+)
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  github_api_args+=(--header "Authorization: Bearer ${GITHUB_TOKEN}")
+fi
+
+fetch_latest_release() {
+  local repository="$1"
+  local output="$2"
+  curl "${github_api_args[@]}" \
+    --output "${output}" \
+    "https://api.github.com/repos/${repository}/releases/latest"
+}
+
+select_release_asset() {
+  local release_file="$1"
+  local jq_filter="$2"
+  local description="$3"
+  local count
+  count="$(jq --arg arch "${ARCH}" \
+    "[.assets[] | select(${jq_filter})] | length" \
+    "${release_file}")"
+  if [[ "${count}" != "1" ]]; then
+    echo "Expected exactly one ${description}; found ${count}." >&2
+    exit 1
+  fi
+  jq -r --arg arch "${ARCH}" \
+    ".assets[] | select(${jq_filter}) | .name" \
+    "${release_file}"
+}
+
+download_release_asset() {
+  local release_file="$1"
+  local asset_name="$2"
+  local destination="$3"
+  local asset_url
+  local asset_digest
+  asset_url="$(jq -r --arg name "${asset_name}" \
+    '.assets[] | select(.name == $name) | .browser_download_url' \
+    "${release_file}")"
+  asset_digest="$(jq -r --arg name "${asset_name}" \
+    '.assets[] | select(.name == $name) | (.digest // "")' \
+    "${release_file}")"
+  if [[ ! "${asset_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "GitHub did not provide a SHA-256 digest for ${asset_name}." >&2
+    exit 1
+  fi
+  echo "Downloading ${asset_name}..."
+  download "${asset_url}" "${destination}"
+  echo "${asset_digest#sha256:}  ${destination}" | sha256sum --check -
 }
 
 echo "Reading the current 24.10-SNAPSHOT profile metadata..."
@@ -177,11 +236,107 @@ for asset in "${daed_asset}" "${luci_asset}" "${btf_asset}"; do
   fi
 done
 
-package_version() {
+echo "Resolving the current SSR Plus+, OpenClash and MosDNS Releases..."
+ssr_release="${WORK_DIR}/ssr-plus-release.json"
+openclash_release="${WORK_DIR}/openclash-release.json"
+mosdns_release="${WORK_DIR}/mosdns-release.json"
+fetch_latest_release "${SSR_PLUS_REPOSITORY}" "${ssr_release}"
+fetch_latest_release "${OPENCLASH_REPOSITORY}" "${openclash_release}"
+fetch_latest_release "${MOSDNS_REPOSITORY}" "${mosdns_release}"
+ssr_tag="$(jq -r '.tag_name' "${ssr_release}")"
+openclash_tag="$(jq -r '.tag_name' "${openclash_release}")"
+mosdns_tag="$(jq -r '.tag_name' "${mosdns_release}")"
+for release_tag_name in "${ssr_tag}" "${openclash_tag}" "${mosdns_tag}"; do
+  if [[ -z "${release_tag_name}" || "${release_tag_name}" == "null" ]]; then
+    echo "A required plugin Release does not have a valid tag." >&2
+    exit 1
+  fi
+done
+
+# jq variables are intentionally expanded by jq, not by this shell.
+# shellcheck disable=SC2016
+ssr_asset="$(select_release_asset "${ssr_release}" \
+  '(.name | startswith("luci-app-ssr-plus_") and endswith("_all.ipk"))' \
+  "SSR Plus+ LuCI IPK")"
+# shellcheck disable=SC2016
+openclash_asset="$(select_release_asset "${openclash_release}" \
+  '(.name | startswith("luci-app-openclash_") and endswith("_all.ipk"))' \
+  "OpenClash LuCI IPK")"
+# shellcheck disable=SC2016
+mosdns_asset="$(select_release_asset "${mosdns_release}" \
+  '(.name == ($arch + "-openwrt-24.10.tar.gz"))' \
+  "MosDNS OpenWrt 24.10 package archive for ${ARCH}")"
+
+download_release_asset \
+  "${ssr_release}" "${ssr_asset}" \
+  "${WORK_DIR}/external-packages/${ssr_asset}"
+download_release_asset \
+  "${openclash_release}" "${openclash_asset}" \
+  "${WORK_DIR}/external-packages/${openclash_asset}"
+mosdns_archive="${WORK_DIR}/downloads/${mosdns_asset}"
+download_release_asset \
+  "${mosdns_release}" "${mosdns_asset}" "${mosdns_archive}"
+
+mosdns_extract="${WORK_DIR}/mosdns-packages"
+mkdir -p "${mosdns_extract}"
+mapfile -t mosdns_members < <(tar --list --gzip --file "${mosdns_archive}")
+if [[ "${#mosdns_members[@]}" -ne 7 ||
+      "${mosdns_members[0]}" != "packages_ci/" ]]; then
+  echo "The MosDNS Release archive has an unexpected member count or root." >&2
+  exit 1
+fi
+for member in "${mosdns_members[@]:1}"; do
+  if [[ ! "${member}" =~ ^packages_ci/[^/]+\.ipk$ ]]; then
+    echo "Unexpected MosDNS Release archive member: ${member}" >&2
+    exit 1
+  fi
+done
+tar --extract --gzip \
+  --file "${mosdns_archive}" \
+  --directory "${mosdns_extract}"
+cp "${mosdns_extract}/packages_ci/"*.ipk "${WORK_DIR}/external-packages/"
+
+package_field() {
   local package_file="$1"
+  local field="$2"
   tar --extract --to-stdout --file "${package_file}" ./control.tar.gz |
     tar --extract --gzip --to-stdout --file - ./control |
-    awk -F ': ' '$1 == "Version" { print $2; exit }'
+    awk -F ': ' -v field="${field}" '$1 == field { print $2; exit }'
+}
+
+package_version() {
+  package_field "$1" Version
+}
+
+find_external_package() {
+  local package_name="$1"
+  local package_file
+  local -a matches=()
+  shopt -s nullglob
+  for package_file in "${WORK_DIR}/external-packages/"*.ipk; do
+    if [[ "$(package_field "${package_file}" Package)" == "${package_name}" ]]; then
+      matches+=("${package_file}")
+    fi
+  done
+  shopt -u nullglob
+  if [[ "${#matches[@]}" -ne 1 ]]; then
+    echo "Expected exactly one external ${package_name} IPK; found ${#matches[@]}." >&2
+    exit 1
+  fi
+  printf '%s\n' "${matches[0]}"
+}
+
+validate_external_package() {
+  local package_name="$1"
+  local expected_arch="$2"
+  local package_file
+  local actual_arch
+  package_file="$(find_external_package "${package_name}")"
+  actual_arch="$(package_field "${package_file}" Architecture)"
+  if [[ "${actual_arch}" != "${expected_arch}" ]]; then
+    echo "Expected ${package_name} architecture ${expected_arch}; found ${actual_arch}." >&2
+    exit 1
+  fi
 }
 
 build_local_package() {
@@ -235,7 +390,38 @@ luci_version="$(
 btf_version="$(
   package_version "${WORK_DIR}/external-packages/${btf_asset}"
 )"
-for version in "${daed_version}" "${luci_version}" "${btf_version}"; do
+validate_external_package luci-app-ssr-plus all
+validate_external_package luci-app-openclash all
+validate_external_package luci-app-mosdns all
+validate_external_package luci-i18n-mosdns-zh-cn all
+validate_external_package mosdns "${ARCH}"
+validate_external_package v2dat "${ARCH}"
+validate_external_package v2ray-geoip all
+validate_external_package v2ray-geosite all
+
+ssr_version="$(package_version "$(find_external_package luci-app-ssr-plus)")"
+openclash_version="$(package_version "$(find_external_package luci-app-openclash)")"
+luci_mosdns_version="$(package_version "$(find_external_package luci-app-mosdns)")"
+mosdns_i18n_version="$(
+  package_version "$(find_external_package luci-i18n-mosdns-zh-cn)"
+)"
+mosdns_version="$(package_version "$(find_external_package mosdns)")"
+v2dat_version="$(package_version "$(find_external_package v2dat)")"
+v2ray_geoip_version="$(package_version "$(find_external_package v2ray-geoip)")"
+v2ray_geosite_version="$(package_version "$(find_external_package v2ray-geosite)")"
+
+for version in \
+  "${daed_version}" \
+  "${luci_version}" \
+  "${btf_version}" \
+  "${ssr_version}" \
+  "${openclash_version}" \
+  "${luci_mosdns_version}" \
+  "${mosdns_i18n_version}" \
+  "${mosdns_version}" \
+  "${v2dat_version}" \
+  "${v2ray_geoip_version}" \
+  "${v2ray_geosite_version}"; do
   if [[ -z "${version}" ]]; then
     echo "Could not read an exact package version from the Release IPKs." >&2
     exit 1
@@ -250,8 +436,7 @@ done
 patched_packages="${WORK_DIR}/patched-packages"
 repack_dir="${WORK_DIR}/daed-repack"
 mkdir -p "${patched_packages}" "${repack_dir}/outer" "${repack_dir}/data"
-cp "${WORK_DIR}/external-packages/${luci_asset}" "${patched_packages}/"
-cp "${WORK_DIR}/external-packages/${btf_asset}" "${patched_packages}/"
+cp "${WORK_DIR}/external-packages/"*.ipk "${patched_packages}/"
 
 # During ImageBuilder finalization, init scripts run from the target rootfs but
 # outside chroot. The upstream daed init script sources an absolute target path,
@@ -317,7 +502,7 @@ echo "Building the dedicated ${PROFILE} image..."
 if make -C "${imagebuilder_dir}" image \
     PROFILE="${PROFILE}" \
     PACKAGES="${IMAGE_PACKAGES}" \
-    DISABLED_SERVICES="daed" \
+    DISABLED_SERVICES="${DISABLED_SERVICES}" \
     FILES="${ROOT_DIR}/files"; then
   imagebuilder_status=0
 else
@@ -367,12 +552,28 @@ declare -A required_versions=(
   [luci-app-daede]="${luci_version}"
   [vmlinux-btf]="${btf_version}"
   [luci-app-360t7-hwaccel]="${hwaccel_version}"
+  [luci-app-ssr-plus]="${ssr_version}"
+  [luci-app-openclash]="${openclash_version}"
+  [luci-app-mosdns]="${luci_mosdns_version}"
+  [luci-i18n-mosdns-zh-cn]="${mosdns_i18n_version}"
+  [mosdns]="${mosdns_version}"
+  [v2dat]="${v2dat_version}"
+  [v2ray-geoip]="${v2ray_geoip_version}"
+  [v2ray-geosite]="${v2ray_geosite_version}"
 )
 for required_package in \
   daed \
   luci-app-daede \
   vmlinux-btf \
-  luci-app-360t7-hwaccel; do
+  luci-app-360t7-hwaccel \
+  luci-app-ssr-plus \
+  luci-app-openclash \
+  luci-app-mosdns \
+  luci-i18n-mosdns-zh-cn \
+  mosdns \
+  v2dat \
+  v2ray-geoip \
+  v2ray-geosite; do
   expected_manifest_line="${required_package} - ${required_versions[$required_package]}"
   if ! grep -Fxq "${expected_manifest_line}" \
     "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
@@ -389,7 +590,32 @@ for required_package in \
   openvpn-easy-rsa \
   luci-app-openvpn-server \
   luci-i18n-openvpn-server-zh-cn \
-  kmod-nft-offload; do
+  kmod-nft-offload \
+  bash \
+  ca-bundle \
+  coreutils \
+  coreutils-base64 \
+  curl \
+  dns2tcp \
+  dnsmasq-full \
+  ip-full \
+  ipt2socks \
+  jq \
+  kmod-tun \
+  libuci-lua \
+  lua \
+  lua-neturl \
+  luci-compat \
+  luci-lua-runtime \
+  lyaml \
+  microsocks \
+  nping \
+  resolveip \
+  ruby \
+  ruby-yaml \
+  unzip \
+  xz \
+  xz-utils; do
   if ! grep -q "^${required_package} - " \
     "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
     echo "Expected ${required_package} in the generated image manifest." >&2
@@ -398,6 +624,7 @@ for required_package in \
 done
 
 for forbidden_package in \
+  dnsmasq \
   luci-app-openvpn \
   luci-i18n-openvpn-zh-cn \
   mwan3 \
@@ -479,7 +706,7 @@ echo "Building the rootfs variant dedicated to the legacy U-Boot layout..."
 if make -C "${imagebuilder_dir}" image \
     PROFILE="${PROFILE}" \
     PACKAGES="${IMAGE_PACKAGES}" \
-    DISABLED_SERVICES="daed" \
+    DISABLED_SERVICES="${DISABLED_SERVICES}" \
     FILES="${legacy_files}"; then
   legacy_imagebuilder_status=0
 else
@@ -532,6 +759,12 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - 360T7 hardware acceleration: \`luci-app-360t7-hwaccel\` and
   \`kmod-nft-offload\`, with dedicated LuCI controls for MediaTek PPE hardware
   flow offloading
+- SSR Plus+ Release: \`${ssr_tag}\` / \`luci-app-ssr-plus\`
+- OpenClash Release: \`${openclash_tag}\` / \`luci-app-openclash\`
+- MosDNS Release: \`${mosdns_tag}\` / \`luci-app-mosdns\`,
+  \`luci-i18n-mosdns-zh-cn\`, matching \`mosdns\`, \`v2dat\` and rule data
+- Proxy and DNS services remain disabled until they are configured, preventing
+  daed, SSR Plus+, OpenClash and MosDNS from competing for traffic on first boot
 - Default LAN address on a clean installation: \`192.168.233.1\`
 
 The initramfs recovery image is the checksum-verified upstream image matching
