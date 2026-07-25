@@ -1,7 +1,23 @@
 #!/bin/sh
 
 uci -q set network.lan.ipaddr='192.168.1.1'
-uci -q set network.lan.ip6assign='60'
+uci -q delete network.lan.ip6assign
+
+# Keep the device-specific suffix while avoiding an upstream clone of the
+# factory WAN MAC, which breaks IPv4 return traffic and IPv6 DAD.
+wan_device="$(
+	uci show network |
+		grep "\.name='wan'$" |
+		cut -d. -f1-2 |
+		head -n 1
+)"
+wan_mac="$(uci -q get "${wan_device}.macaddr")"
+case "${wan_mac}" in
+	??:??:??:??:??:??)
+		uci -q set "${wan_device}.macaddr=02:${wan_mac#*:}"
+		;;
+esac
+
 uci -q set network.wan6='interface'
 uci -q set network.wan6.proto='dhcpv6'
 uci -q set network.wan6.device='@wan'
@@ -9,10 +25,15 @@ uci -q set network.wan6.reqaddress='try'
 uci -q set network.wan6.reqprefix='auto'
 uci -q commit network
 
-uci -q set dhcp.lan.ra='server'
-uci -q set dhcp.lan.dhcpv6='server'
-uci -q set dhcp.lan.ndp='disabled'
-uci -q set dhcp.lan.ra_management='1'
+uci -q set dhcp.lan.ra='relay'
+uci -q set dhcp.lan.dhcpv6='relay'
+uci -q set dhcp.lan.ndp='relay'
+uci -q delete dhcp.lan.ra_slaac
+uci -q delete dhcp.lan.ra_management
+uci -q set dhcp.wan.master='1'
+uci -q set dhcp.wan.ra='relay'
+uci -q set dhcp.wan.dhcpv6='relay'
+uci -q set dhcp.wan.ndp='relay'
 uci -q commit dhcp
 
 exit 0

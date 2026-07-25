@@ -49,8 +49,10 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - 上游 ImageBuilder 即使完成 FIT 和校验和也可能返回非零；工作流不以该
   状态单独判定成功，而是强制执行机型、包清单和固件元数据校验。
 - 全新安装的默认 LAN 地址为 `192.168.1.1`。
-- 默认启用 WAN DHCPv6 客户端、LAN `/60` IPv6 前缀分配以及
-  RA/DHCPv6 服务；能否获得公网 IPv6 前缀取决于上级网络和运营商。
+- 全新安装会根据设备原 WAN MAC 保留后 5 字节并生成唯一的本地管理
+  WAN MAC，规避上级网络克隆原厂 MAC 时出现的回包丢失和 IPv6 DAD 冲突。
+- 默认启用 WAN DHCPv6 客户端，并将 LAN 配置为 RA/DHCPv6/NDP 中继，
+  适配上级路由仅提供 SLAAC `/64`、不下发 DHCPv6-PD 的二级路由环境。
 
 ## GitHub Actions 构建
 

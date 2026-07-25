@@ -781,7 +781,10 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   use the current ImmortalWrt feed versions
 - Proxy and DNS services remain disabled until they are configured, preventing
   daed, SSR Plus+, OpenClash and MosDNS from competing for traffic on first boot
-- IPv6: DHCPv6 client on WAN, a delegated \`/60\` on LAN, and LAN RA/DHCPv6
+- WAN MAC: a device-unique locally administered address derived from the
+  factory MAC, avoiding upstream MAC-clone/DAD conflicts
+- IPv6: DHCPv6 client on WAN with LAN RA/DHCPv6/NDP relay for upstream routers
+  that provide SLAAC but no DHCPv6 prefix delegation
 - Default LAN address on a clean installation: \`192.168.1.1\`
 
 The initramfs recovery image is the checksum-verified upstream image matching
