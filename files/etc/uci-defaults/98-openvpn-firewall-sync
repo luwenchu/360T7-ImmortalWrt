@@ -37,12 +37,4 @@ if [ -n "${wan_zone}" ]; then
 fi
 uci -q commit firewall
 
-# The upstream router is on 192.168.3.0/24 in this dedicated deployment.
-if ! uci -q get openvpn.myvpn.push |
-	grep -Fq 'route 192.168.3.0 255.255.255.0'; then
-	uci -q add_list \
-		openvpn.myvpn.push='route 192.168.3.0 255.255.255.0'
-	uci -q commit openvpn
-fi
-
 exit 0

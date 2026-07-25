@@ -770,7 +770,7 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   port/protocol settings, client push directives, certificate generation and
   downloadable \`.ovpn\` client configuration; LuCI changes keep the WAN
   firewall port/protocol synchronized, clients verify the server certificate,
-  and standard WAN NAT permits VPN access to both router subnets and the Internet
+  and standard WAN NAT permits access to configured private routes and the Internet
 - DDNS-GO: \`ddns-go\`, \`luci-app-ddns-go\` and its Chinese translation;
   the service remains disabled until account and domain settings are configured
 - 360T7 hardware acceleration: \`luci-app-360t7-hwaccel\` and
