@@ -1,0 +1,25 @@
+#!/bin/sh
+
+port="$(uci -q get openvpn.myvpn.port)"
+proto="$(uci -q get openvpn.myvpn.proto)"
+
+case "${port}" in
+	''|*[!0-9]*)
+		exit 0
+		;;
+esac
+
+case "${proto}" in
+	tcp4|tcp6)
+	firewall_proto='tcp'
+	;;
+*)
+	firewall_proto='udp'
+	;;
+esac
+
+uci -q set firewall.openvpn.dest_port="${port}"
+uci -q set firewall.openvpn.proto="${firewall_proto}"
+uci -q commit firewall
+
+exit 0

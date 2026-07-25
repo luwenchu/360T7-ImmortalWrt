@@ -768,7 +768,8 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   \`luci-app-argon-config\` and its Chinese translation
 - OpenVPN server: \`luci-app-openvpn-server\` with Chinese translation,
   port/protocol settings, client push directives, certificate generation and
-  downloadable \`.ovpn\` client configuration
+  downloadable \`.ovpn\` client configuration; LuCI changes keep the WAN
+  firewall port/protocol synchronized and clients verify the server certificate
 - DDNS-GO: \`ddns-go\`, \`luci-app-ddns-go\` and its Chinese translation;
   the service remains disabled until account and domain settings are configured
 - 360T7 hardware acceleration: \`luci-app-360t7-hwaccel\` and
