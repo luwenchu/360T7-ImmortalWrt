@@ -2,6 +2,12 @@
 
 port="$(uci -q get openvpn.myvpn.port)"
 proto="$(uci -q get openvpn.myvpn.proto)"
+wan_zone="$(
+	uci show firewall |
+		grep "\.name='wan'$" |
+		cut -d. -f1-2 |
+		head -n 1
+)"
 
 case "${port}" in
 	''|*[!0-9]*)
@@ -20,6 +26,23 @@ esac
 
 uci -q set firewall.openvpn.dest_port="${port}"
 uci -q set firewall.openvpn.proto="${firewall_proto}"
+
+# OpenVPN clients need standard source NAT to reach both the upstream private
+# subnet and the Internet. Full-cone NAT does not reliably translate TCP flows
+# from tun0 on this fw4 build.
+uci -q set firewall.@defaults[0].fullcone='0'
+if [ -n "${wan_zone}" ]; then
+	uci -q set "${wan_zone}.masq=1"
+	uci -q set "${wan_zone}.mtu_fix=1"
+fi
 uci -q commit firewall
+
+# The upstream router is on 192.168.3.0/24 in this dedicated deployment.
+if ! uci -q get openvpn.myvpn.push |
+	grep -Fq 'route 192.168.3.0 255.255.255.0'; then
+	uci -q add_list \
+		openvpn.myvpn.push='route 192.168.3.0 255.255.255.0'
+	uci -q commit openvpn
+fi
 
 exit 0

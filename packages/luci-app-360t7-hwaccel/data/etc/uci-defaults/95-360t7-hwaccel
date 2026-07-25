@@ -2,6 +2,7 @@
 
 uci -q set firewall.@defaults[0].flow_offloading='1'
 uci -q set firewall.@defaults[0].flow_offloading_hw='1'
+uci -q set firewall.@defaults[0].fullcone='0'
 uci -q commit firewall
 
 exit 0

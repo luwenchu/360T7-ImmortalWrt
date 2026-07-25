@@ -26,7 +26,9 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - 集成专用 `luci-app-openvpn-server` 和简体中文翻译，可设置服务端端口、
   TCP/UDP 与 IPv4/IPv6 协议、客户端网段和 push 指令，并可生成证书及
   下载内嵌证书的 `.ovpn` 客户端配置。固件会同步 OpenVPN 监听端口与
-  WAN 防火墙协议/端口，并在客户端配置中校验服务端证书用途。
+  WAN 防火墙协议/端口，并在客户端配置中校验服务端证书用途；默认推送
+  `192.168.1.0/24` 与上级 `192.168.3.0/24` 路由，使用标准 WAN NAT
+  保证 VPN 客户端可访问两级内网和公网。
 - 集成官方源中的 `ddns-go`、`luci-app-ddns-go` 和简体中文翻译。
   DDNS-GO 默认禁用，填写域名服务商、账号和域名配置后再启用。
 - 集成专用 `luci-app-360t7-hwaccel` 和 `kmod-nft-offload`，在 LuCI
