@@ -28,6 +28,10 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   下载内嵌证书的 `.ovpn` 客户端配置。固件会同步 OpenVPN 监听端口与
   WAN 防火墙协议/端口，并在客户端配置中校验服务端证书用途；使用标准
   WAN NAT 保证 VPN 客户端可访问按实际环境推送的内网和公网。
+- OpenVPN 的 RFC 7919 `ffdhe2048` 公共参数在固件构建阶段生成，避免
+  Easy-RSA 在设备首次启动时同步执行耗时的 `gen-dh`。每台路由器仍会在
+  首次启动时独立生成 CA、服务器和客户端私钥，不会在固件中预置或复用
+  设备私钥；LuCI 中的证书更新与 `.ovpn` 下载功能保持不变。
 - 集成官方源中的 `ddns-go`、`luci-app-ddns-go` 和简体中文翻译。
   DDNS-GO 默认禁用，填写域名服务商、账号和域名配置后再启用。
 - 集成专用 `luci-app-360t7-hwaccel` 和 `kmod-nft-offload`，在 LuCI
@@ -74,7 +78,7 @@ Release 会更新原有资产，不创建其他机型产物。
 ## 本地 Linux 构建
 
 需要 Linux x86_64、约 5 GB 可用空间，以及 `curl`、`jq`、`make`、
-`tar`、`zstd` 等基础工具：
+`openssl`、`tar`、`zstd` 等基础工具：
 
 ```bash
 chmod +x scripts/build.sh

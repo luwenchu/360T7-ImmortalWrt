@@ -22,7 +22,7 @@ require_command() {
   }
 }
 
-for command_name in curl jq sha256sum tar zstd make find realpath od du; do
+for command_name in curl jq sha256sum tar zstd make find realpath od du openssl; do
   require_command "${command_name}"
 done
 
@@ -31,6 +31,31 @@ find "${WORK_DIR}" -mindepth 1 -maxdepth 1 \
   ! -name downloads -exec rm -rf -- {} +
 rm -rf "${DIST_DIR}"
 mkdir -p "${WORK_DIR}/external-packages" "${DIST_DIR}"
+
+image_files_dir="${WORK_DIR}/image-files"
+mkdir -p "${image_files_dir}"
+cp -a "${ROOT_DIR}/files/." "${image_files_dir}/"
+mkdir -p "${image_files_dir}/etc/openvpn"
+
+# RFC 7919 FFDHE parameters are public and do not need to be unique per router.
+# Preparing the named group here avoids blocking first boot on Easy-RSA gen-dh;
+# the router still creates its own CA, server key and client key.
+openvpn_ffdhe="${image_files_dir}/etc/openvpn/ffdhe2048.pem"
+if grep -Eq '^[[:space:]]*[^#].*gen-dh' \
+  "${image_files_dir}/etc/openvpn/renewcert.sh"; then
+  echo "OpenVPN renewal must not generate DH parameters on the router." >&2
+  exit 1
+fi
+grep -Fq 'FFDHE_PARAMETERS="/etc/openvpn/ffdhe2048.pem"' \
+  "${image_files_dir}/etc/openvpn/renewcert.sh"
+openssl genpkey \
+  -genparam \
+  -algorithm DH \
+  -pkeyopt group:ffdhe2048 \
+  -out "${openvpn_ffdhe}"
+openssl pkeyparam -in "${openvpn_ffdhe}" -check -noout >/dev/null
+chmod 0644 "${openvpn_ffdhe}"
+chmod 0755 "${image_files_dir}/etc/openvpn/renewcert.sh"
 
 download() {
   local url="$1"
@@ -513,7 +538,7 @@ if make -C "${imagebuilder_dir}" image \
     PROFILE="${PROFILE}" \
     PACKAGES="${IMAGE_PACKAGES}" \
     DISABLED_SERVICES="${DISABLED_SERVICES}" \
-    FILES="${ROOT_DIR}/files"; then
+    FILES="${image_files_dir}"; then
   imagebuilder_status=0
 else
   imagebuilder_status=$?
@@ -670,7 +695,7 @@ fi
 
 echo "Preparing the legacy kernel/rootfs upgrade logic for the U-Boot Web image..."
 legacy_files="${WORK_DIR}/legacy-files"
-cp -a "${ROOT_DIR}/files" "${legacy_files}"
+cp -a "${image_files_dir}" "${legacy_files}"
 legacy_platform_source="${imagebuilder_dir}/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh"
 legacy_platform="${legacy_files}/lib/upgrade/platform.sh"
 if [[ ! -f "${legacy_platform_source}" ]]; then
@@ -770,7 +795,10 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   port/protocol settings, client push directives, certificate generation and
   downloadable \`.ovpn\` client configuration; LuCI changes keep the WAN
   firewall port/protocol synchronized, clients verify the server certificate,
-  and standard WAN NAT permits access to configured private routes and the Internet
+  and standard WAN NAT permits access to configured private routes and the Internet.
+  A build-time RFC 7919 \`ffdhe2048\` parameter file removes the expensive
+  first-boot DH generation while every router still creates unique CA, server
+  and client private keys
 - DDNS-GO: \`ddns-go\`, \`luci-app-ddns-go\` and its Chinese translation;
   the service remains disabled until account and domain settings are configured
 - 360T7 hardware acceleration: \`luci-app-360t7-hwaccel\` and
