@@ -12,10 +12,6 @@ SSR_PLUS_REPOSITORY="${SSR_PLUS_REPOSITORY:-fw876/helloworld}"
 OPENCLASH_REPOSITORY="${OPENCLASH_REPOSITORY:-vernesong/OpenClash}"
 MOSDNS_REPOSITORY="${MOSDNS_REPOSITORY:-sbwml/luci-app-mosdns}"
 LUCI_SOURCE_COMMIT="92685321ae7c2387e89f2ad9441e77359a81d7be"
-PO2LMO_SOURCE_URL="https://raw.githubusercontent.com/openwrt/luci/${LUCI_SOURCE_COMMIT}/modules/luci-base/src/po2lmo.c"
-PO2LMO_SOURCE_SHA256="567caad86e85332a026bc502e10f3f16eb5ef8cb0a7637623217c1a1ba2111ef"
-LMO_HEADER_URL="https://raw.githubusercontent.com/openwrt/luci/${LUCI_SOURCE_COMMIT}/modules/luci-base/src/lib/lmo.h"
-LMO_HEADER_SHA256="0cba114fdc0588cd2d372881c1380ae4f4736043aef0d029dfa486c4dde87206"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
 IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-base-zh-cn luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-passwall luci-i18n-passwall-zh-cn luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
 DISABLED_SERVICES="daed shadowsocksr openclash mosdns ddns-go"
@@ -330,15 +326,21 @@ tar --extract --gzip \
 cp "${mosdns_extract}/packages_ci/"*.ipk "${WORK_DIR}/external-packages/"
 
 echo "Building the SSR Plus+ Simplified Chinese translation..."
-po2lmo_work="${WORK_DIR}/po2lmo"
-mkdir -p "${po2lmo_work}/lib"
-download "${PO2LMO_SOURCE_URL}" "${po2lmo_work}/po2lmo.c"
-download "${LMO_HEADER_URL}" "${po2lmo_work}/lib/lmo.h"
-echo "${PO2LMO_SOURCE_SHA256}  ${po2lmo_work}/po2lmo.c" | sha256sum --check -
-echo "${LMO_HEADER_SHA256}  ${po2lmo_work}/lib/lmo.h" | sha256sum --check -
-gcc -O2 -Wall -Wextra \
-  -o "${po2lmo_work}/po2lmo" \
-  "${po2lmo_work}/po2lmo.c"
+luci_source="${WORK_DIR}/luci-source"
+git init --quiet "${luci_source}"
+git -C "${luci_source}" remote add origin https://github.com/openwrt/luci.git
+git -C "${luci_source}" fetch --quiet --depth 1 origin "${LUCI_SOURCE_COMMIT}"
+git -C "${luci_source}" checkout --quiet --detach FETCH_HEAD
+if [[ "$(git -C "${luci_source}" rev-parse HEAD)" != "${LUCI_SOURCE_COMMIT}" ]]; then
+  echo "The checked out LuCI source does not match ${LUCI_SOURCE_COMMIT}." >&2
+  exit 1
+fi
+make -C "${luci_source}/modules/luci-base/src" clean po2lmo
+po2lmo="${luci_source}/modules/luci-base/src/po2lmo"
+if [[ ! -x "${po2lmo}" ]]; then
+  echo "The pinned LuCI po2lmo tool was not built." >&2
+  exit 1
+fi
 
 ssr_source="${WORK_DIR}/ssr-plus-source"
 git -c advice.detachedHead=false clone \
@@ -367,7 +369,7 @@ fi
 ssr_lmo_dir="${image_files_dir}/usr/lib/lua/luci/i18n"
 mkdir -p "${ssr_lmo_dir}"
 ssr_lmo="${ssr_lmo_dir}/ssr-plus.zh-cn.lmo"
-"${po2lmo_work}/po2lmo" "${ssr_po}" "${ssr_lmo}"
+"${po2lmo}" "${ssr_po}" "${ssr_lmo}"
 if [[ ! -s "${ssr_lmo}" ]]; then
   echo "The SSR Plus+ Simplified Chinese LMO file was not generated." >&2
   exit 1
