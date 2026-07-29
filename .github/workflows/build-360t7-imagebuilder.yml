@@ -75,6 +75,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Point release tag at this build
+        env:
+          RELEASE_TAG: ${{ steps.build.outputs.release_tag }}
+        run: |
+          git tag --force "${RELEASE_TAG}" "${GITHUB_SHA}"
+          git push --force origin "refs/tags/${RELEASE_TAG}"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
