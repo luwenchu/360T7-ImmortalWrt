@@ -23,7 +23,7 @@ require_command() {
   }
 }
 
-for command_name in curl gcc git jq sha256sum tar zstd make find realpath od du openssl; do
+for command_name in curl gcc git jq sha256sum tar zstd make find readlink realpath od du openssl; do
   require_command "${command_name}"
 done
 
@@ -353,9 +353,16 @@ if [[ ! "${ssr_source_commit}" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Could not resolve the SSR Plus+ source commit for ${ssr_tag}." >&2
   exit 1
 fi
-ssr_language_alias="$(
-  tr -d '\r\n' <"${ssr_source}/luci-app-ssr-plus/po/zh-cn"
-)"
+ssr_language_alias_path="${ssr_source}/luci-app-ssr-plus/po/zh-cn"
+if [[ -L "${ssr_language_alias_path}" ]]; then
+  ssr_language_alias="$(readlink "${ssr_language_alias_path}")"
+elif [[ -f "${ssr_language_alias_path}" ]]; then
+  ssr_language_alias="$(tr -d '\r\n' <"${ssr_language_alias_path}")"
+else
+  echo "The SSR Plus+ Simplified Chinese language alias is missing." >&2
+  exit 1
+fi
+ssr_language_alias="${ssr_language_alias##*/}"
 if [[ ! "${ssr_language_alias}" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "The SSR Plus+ Simplified Chinese language alias is invalid." >&2
   exit 1
