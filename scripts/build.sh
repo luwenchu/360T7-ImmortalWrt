@@ -697,9 +697,9 @@ for required_package in \
   coreutils \
   coreutils-base64 \
   coreutils-nohup \
-  coreutils-timeout \
   curl \
   chinadns-ng \
+  dns2socks \
   dns2tcp \
   dnsmasq-full \
   ip-full \
