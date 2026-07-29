@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Keep both PassWall entry points installed but inactive until the user has
+# configured nodes and routing policy.
+uci -q set passwall.@global[0].enabled='0'
+uci -q set passwall.@global[0].socks_enabled='0'
+uci -q set passwall.@haproxy_config[0].balancing_enable='0'
+uci -q set passwall_server.@global[0].enable='0'
+uci -q commit passwall
+uci -q commit passwall_server
+
+exit 0

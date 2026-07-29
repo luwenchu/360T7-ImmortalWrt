@@ -1,6 +1,6 @@
 #!/bin/sh
 
-uci -q set network.lan.ipaddr='192.168.1.1'
+uci -q set network.lan.ipaddr='192.168.2.1'
 uci -q delete network.lan.ip6assign
 
 # Keep the device-specific suffix while avoiding an upstream clone of the
@@ -35,5 +35,9 @@ uci -q set dhcp.wan.ra='relay'
 uci -q set dhcp.wan.dhcpv6='relay'
 uci -q set dhcp.wan.ndp='relay'
 uci -q commit dhcp
+
+uci -q del_list openvpn.myvpn.push='route 192.168.1.0 255.255.255.0'
+uci -q add_list openvpn.myvpn.push='route 192.168.2.0 255.255.255.0'
+uci -q commit openvpn
 
 exit 0

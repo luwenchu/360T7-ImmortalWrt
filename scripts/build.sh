@@ -11,8 +11,13 @@ DAED_REPOSITORY="${DAED_REPOSITORY:-kenzok8/openwrt-daede}"
 SSR_PLUS_REPOSITORY="${SSR_PLUS_REPOSITORY:-fw876/helloworld}"
 OPENCLASH_REPOSITORY="${OPENCLASH_REPOSITORY:-vernesong/OpenClash}"
 MOSDNS_REPOSITORY="${MOSDNS_REPOSITORY:-sbwml/luci-app-mosdns}"
+LUCI_SOURCE_COMMIT="92685321ae7c2387e89f2ad9441e77359a81d7be"
+PO2LMO_SOURCE_URL="https://raw.githubusercontent.com/openwrt/luci/${LUCI_SOURCE_COMMIT}/modules/luci-base/src/po2lmo.c"
+PO2LMO_SOURCE_SHA256="567caad86e85332a026bc502e10f3f16eb5ef8cb0a7637623217c1a1ba2111ef"
+LMO_HEADER_URL="https://raw.githubusercontent.com/openwrt/luci/${LUCI_SOURCE_COMMIT}/modules/luci-base/src/lib/lmo.h"
+LMO_HEADER_SHA256="0cba114fdc0588cd2d372881c1380ae4f4736043aef0d029dfa486c4dde87206"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
-IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
+IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-base-zh-cn luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-passwall luci-i18n-passwall-zh-cn luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
 DISABLED_SERVICES="daed shadowsocksr openclash mosdns ddns-go"
 
 require_command() {
@@ -22,7 +27,7 @@ require_command() {
   }
 }
 
-for command_name in curl jq sha256sum tar zstd make find realpath od du openssl; do
+for command_name in curl gcc git jq sha256sum tar zstd make find realpath od du openssl; do
   require_command "${command_name}"
 done
 
@@ -56,6 +61,7 @@ openssl genpkey \
 openssl pkeyparam -in "${openvpn_ffdhe}" -check -noout >/dev/null
 chmod 0644 "${openvpn_ffdhe}"
 chmod 0755 "${image_files_dir}/etc/openvpn/renewcert.sh"
+chmod 0755 "${image_files_dir}/etc/uci-defaults/zz-passwall-disabled"
 
 download() {
   local url="$1"
@@ -271,7 +277,10 @@ fetch_latest_release "${MOSDNS_REPOSITORY}" "${mosdns_release}"
 ssr_tag="$(jq -r '.tag_name' "${ssr_release}")"
 openclash_tag="$(jq -r '.tag_name' "${openclash_release}")"
 mosdns_tag="$(jq -r '.tag_name' "${mosdns_release}")"
-for release_tag_name in "${ssr_tag}" "${openclash_tag}" "${mosdns_tag}"; do
+for release_tag_name in \
+  "${ssr_tag}" \
+  "${openclash_tag}" \
+  "${mosdns_tag}"; do
   if [[ -z "${release_tag_name}" || "${release_tag_name}" == "null" ]]; then
     echo "A required plugin Release does not have a valid tag." >&2
     exit 1
@@ -283,7 +292,6 @@ done
 ssr_asset="$(select_release_asset "${ssr_release}" \
   '(.name | startswith("luci-app-ssr-plus_") and endswith("_all.ipk"))' \
   "SSR Plus+ LuCI IPK")"
-# shellcheck disable=SC2016
 openclash_asset="$(select_release_asset "${openclash_release}" \
   '(.name | startswith("luci-app-openclash_") and endswith("_all.ipk"))' \
   "OpenClash LuCI IPK")"
@@ -320,6 +328,51 @@ tar --extract --gzip \
   --file "${mosdns_archive}" \
   --directory "${mosdns_extract}"
 cp "${mosdns_extract}/packages_ci/"*.ipk "${WORK_DIR}/external-packages/"
+
+echo "Building the SSR Plus+ Simplified Chinese translation..."
+po2lmo_work="${WORK_DIR}/po2lmo"
+mkdir -p "${po2lmo_work}/lib"
+download "${PO2LMO_SOURCE_URL}" "${po2lmo_work}/po2lmo.c"
+download "${LMO_HEADER_URL}" "${po2lmo_work}/lib/lmo.h"
+echo "${PO2LMO_SOURCE_SHA256}  ${po2lmo_work}/po2lmo.c" | sha256sum --check -
+echo "${LMO_HEADER_SHA256}  ${po2lmo_work}/lib/lmo.h" | sha256sum --check -
+gcc -O2 -Wall -Wextra \
+  -o "${po2lmo_work}/po2lmo" \
+  "${po2lmo_work}/po2lmo.c"
+
+ssr_source="${WORK_DIR}/ssr-plus-source"
+git -c advice.detachedHead=false clone \
+  --depth 1 \
+  --branch "${ssr_tag}" \
+  "https://github.com/${SSR_PLUS_REPOSITORY}.git" \
+  "${ssr_source}"
+ssr_source_commit="$(git -C "${ssr_source}" rev-parse HEAD)"
+if [[ ! "${ssr_source_commit}" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "Could not resolve the SSR Plus+ source commit for ${ssr_tag}." >&2
+  exit 1
+fi
+ssr_language_alias="$(
+  tr -d '\r\n' <"${ssr_source}/luci-app-ssr-plus/po/zh-cn"
+)"
+if [[ ! "${ssr_language_alias}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "The SSR Plus+ Simplified Chinese language alias is invalid." >&2
+  exit 1
+fi
+ssr_po="${ssr_source}/luci-app-ssr-plus/po/${ssr_language_alias}/ssr-plus.po"
+if [[ ! -s "${ssr_po}" ]] ||
+   ! grep -Eq '^msgstr "[^"]+' "${ssr_po}"; then
+  echo "The SSR Plus+ Simplified Chinese PO file is missing or empty." >&2
+  exit 1
+fi
+ssr_lmo_dir="${image_files_dir}/usr/lib/lua/luci/i18n"
+mkdir -p "${ssr_lmo_dir}"
+ssr_lmo="${ssr_lmo_dir}/ssr-plus.zh-cn.lmo"
+"${po2lmo_work}/po2lmo" "${ssr_po}" "${ssr_lmo}"
+if [[ ! -s "${ssr_lmo}" ]]; then
+  echo "The SSR Plus+ Simplified Chinese LMO file was not generated." >&2
+  exit 1
+fi
+ssr_translation_sha256="$(sha256sum "${ssr_lmo}" | awk '{ print $1 }')"
 
 package_field() {
   local package_file="$1"
@@ -616,7 +669,10 @@ done
 for required_package in \
   luci-theme-argon \
   luci-app-argon-config \
+  luci-i18n-base-zh-cn \
   luci-i18n-argon-config-zh-cn \
+  luci-app-passwall \
+  luci-i18n-passwall-zh-cn \
   openvpn-openssl \
   openvpn-easy-rsa \
   luci-app-openvpn-server \
@@ -631,7 +687,10 @@ for required_package in \
   ca-bundle \
   coreutils \
   coreutils-base64 \
+  coreutils-nohup \
+  coreutils-timeout \
   curl \
+  chinadns-ng \
   dns2tcp \
   dnsmasq-full \
   ip-full \
@@ -642,6 +701,7 @@ for required_package in \
   lua \
   lua-neturl \
   luci-compat \
+  luci-lib-jsonc \
   luci-lua-runtime \
   lyaml \
   microsocks \
@@ -649,6 +709,7 @@ for required_package in \
   resolveip \
   ruby \
   ruby-yaml \
+  tcping \
   unzip \
   v2ray-geoip \
   v2ray-geosite \
@@ -805,17 +866,24 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   \`kmod-nft-offload\`, with a Chinese LuCI page for MediaTek PPE IPv4/IPv6
   hardware flow offloading
 - SSR Plus+ Release: \`${ssr_tag}\` / \`luci-app-ssr-plus\`
+- SSR Plus+ Simplified Chinese: compiled from the same Release tag at
+  \`${ssr_source_commit}\` (LMO SHA-256 \`${ssr_translation_sha256}\`)
+- PassWall: \`luci-app-passwall\` and \`luci-i18n-passwall-zh-cn\` from the
+  matching ImmortalWrt 24.10 feed; client and server main switches remain
+  disabled until nodes and routing rules are configured
 - OpenClash Release: \`${openclash_tag}\` / \`luci-app-openclash\`
 - MosDNS Release: \`${mosdns_tag}\` / \`luci-app-mosdns\`,
   \`luci-i18n-mosdns-zh-cn\`, matching \`mosdns\` and \`v2dat\`; rule databases
   use the current ImmortalWrt feed versions
 - Proxy and DNS services remain disabled until they are configured, preventing
-  daed, SSR Plus+, OpenClash and MosDNS from competing for traffic on first boot
+  daed, SSR Plus+, PassWall, OpenClash and MosDNS from competing for traffic
+  on first boot
 - WAN MAC: a device-unique locally administered address derived from the
   factory MAC, avoiding upstream MAC-clone/DAD conflicts
 - IPv6: DHCPv6 client on WAN with LAN RA/DHCPv6/NDP relay for upstream routers
   that provide SLAAC but no DHCPv6 prefix delegation
-- Default LAN address on a clean installation: \`192.168.1.1\`
+- Default LAN address on a clean installation: \`192.168.2.1\`; the bundled
+  OpenVPN server pushes \`192.168.2.0/24\` by default
 
 The initramfs recovery image is the checksum-verified upstream image matching
 this ImageBuilder revision. It runs from RAM and intentionally does not contain
