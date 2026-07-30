@@ -88,13 +88,20 @@ if [[ "$(od -An -tx1 -N4 "${rootfs}" | tr -d ' \n')" != "68737173" ]]; then
 fi
 
 # The upstream image binds this DTB to a combined FIT UBI volume. This U-Boot
-# updater instead writes separate kernel and rootfs volumes.
-"${fdtput}" -d "${legacy_dtb}" /chosen bootargs-append
+# updater instead writes separate kernel and rootfs volumes, so replace the
+# fitblk root with an explicit UBI rootfs command line.
+legacy_bootargs="ubi.mtd=ubi root=ubi0:rootfs rootfstype=squashfs rootwait"
+"${fdtput}" -t s "${legacy_dtb}" /chosen bootargs-append \
+  "${legacy_bootargs}"
 "${fdtput}" -d "${legacy_dtb}" /chosen rootdisk
 
-if "${fdtget}" "${legacy_dtb}" /chosen bootargs-append >/dev/null 2>&1 ||
-   "${fdtget}" "${legacy_dtb}" /chosen rootdisk >/dev/null 2>&1; then
-  echo "The legacy DTB still forces the combined FIT root disk." >&2
+actual_bootargs="$("${fdtget}" "${legacy_dtb}" /chosen bootargs-append)"
+if [[ "${actual_bootargs}" != "${legacy_bootargs}" ]]; then
+  echo "The legacy DTB does not select the rootfs UBI volume." >&2
+  exit 1
+fi
+if "${fdtget}" "${legacy_dtb}" /chosen rootdisk >/dev/null 2>&1; then
+  echo "The legacy DTB still references the combined FIT root disk." >&2
   exit 1
 fi
 
