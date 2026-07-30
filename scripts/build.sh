@@ -240,6 +240,7 @@ select_asset() {
   local description="$2"
   local count
   count="$(jq --arg arch "${ARCH}" --arg kernel "${kernel_version}" \
+    --arg release "${daed_tag#v}" \
     "[.assets[] | select(${jq_filter})] | length" \
     "${WORK_DIR}/daed-release.json")"
   if [[ "${count}" != "1" ]]; then
@@ -247,6 +248,7 @@ select_asset() {
     exit 1
   fi
   jq -r --arg arch "${ARCH}" --arg kernel "${kernel_version}" \
+    --arg release "${daed_tag#v}" \
     ".assets[] | select(${jq_filter}) | .name" \
     "${WORK_DIR}/daed-release.json"
 }
@@ -254,7 +256,7 @@ select_asset() {
 # jq variables are intentionally expanded by jq, not by this shell.
 # shellcheck disable=SC2016
 daed_asset="$(select_asset \
-  '(.name | startswith("daed_") and endswith("_" + $arch + ".ipk"))' \
+  '(.name | startswith("daed_" + $release + "-") and endswith("_" + $arch + ".ipk"))' \
   "daed IPK for ${ARCH}")"
 luci_asset="$(select_asset \
   '(.name | startswith("luci-app-daede_") and endswith("_all.ipk"))' \
