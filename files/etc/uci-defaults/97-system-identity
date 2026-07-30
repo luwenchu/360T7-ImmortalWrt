@@ -1,9 +1,0 @@
-#!/bin/sh
-
-# Keep the RFC-compatible hostname usable by DHCP and local DNS while exposing
-# the requested Chinese organization name through the system description.
-uci -q set system.@system[0].hostname='zhengzhou-zian'
-uci -q set system.@system[0].description='郑州子安信息科技'
-uci -q commit system
-
-exit 0

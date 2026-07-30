@@ -20,6 +20,13 @@ proto:value("udp6", translate("UDP Server IPv6"))
 port = s:taboption("basic", Value, "port", translate("Port"))
 port.datatype = "range(1, 65535)"
 
+remote_port = s:taboption("basic", Value, "remote_port",
+	translate("Public Port"))
+remote_port.datatype = "range(1, 65535)"
+remote_port.default = "8989"
+remote_port.rmempty = true
+remote_port.description = translate("External port forwarded by the upstream router; leave empty to use the server port")
+
 ddns = s:taboption("basic", Value, "ddns", translate("WAN DDNS or IP"))
 ddns.datatype = "string"
 ddns.default = "example.com"

@@ -5,13 +5,16 @@ umask 077
 
 ddns="$(uci -q get openvpn.myvpn.ddns)"
 port="$(uci -q get openvpn.myvpn.port)"
+remote_port="$(uci -q get openvpn.myvpn.remote_port)"
 proto="$(uci -q get openvpn.myvpn.proto | sed 's/server/client/g')"
+
+[ -n "${remote_port}" ] || remote_port="${port}"
 
 cat > /tmp/my.ovpn <<EOF
 client
 dev tun
 proto ${proto}
-remote ${ddns} ${port}
+remote ${ddns} ${remote_port}
 resolv-retry infinite
 nobind
 persist-key

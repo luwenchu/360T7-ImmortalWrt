@@ -60,14 +60,9 @@ chmod 0755 \
   "${image_files_dir}/etc/openvpn/genovpn.sh" \
   "${image_files_dir}/etc/openvpn/renewcert.sh"
 chmod 0755 \
-  "${image_files_dir}/etc/uci-defaults/97-system-identity" \
   "${image_files_dir}/etc/uci-defaults/99-360t7-lan" \
   "${image_files_dir}/etc/uci-defaults/zz-passwall-disabled"
 
-grep -Fq "system.@system[0].hostname='zhengzhou-zian'" \
-  "${image_files_dir}/etc/uci-defaults/97-system-identity"
-grep -Fq "system.@system[0].description='郑州子安信息科技'" \
-  "${image_files_dir}/etc/uci-defaults/97-system-identity"
 grep -Fq "network.lan.ipaddr='192.168.10.1'" \
   "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
 grep -Fq "delete dhcp.wan.ignore" \
@@ -886,7 +881,8 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   port/protocol settings, client push directives, certificate generation and
   downloadable \`.ovpn\` client configuration; LuCI changes keep the WAN
   firewall port/protocol synchronized, clients verify the server certificate,
-  and standard WAN NAT permits access to configured private routes and the Internet.
+  standard WAN NAT permits access to configured private routes and the Internet,
+  and the public forwarded port may differ from the local listening port.
   A build-time RFC 7919 \`ffdhe2048\` parameter file removes the expensive
   first-boot DH generation while every router still creates unique CA, server
   and client private keys
@@ -912,8 +908,6 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   factory MAC, avoiding upstream MAC-clone/DAD conflicts
 - IPv6: DHCPv6 client on WAN with LAN RA/DHCPv6/NDP relay for upstream routers
   that provide SLAAC but no DHCPv6 prefix delegation
-- System identity: hostname \`zhengzhou-zian\`, description
-  \`郑州子安信息科技\`
 - Default LAN address on a clean installation: \`192.168.10.1\`; the bundled
   OpenVPN server pushes \`192.168.10.0/24\` by default
 
