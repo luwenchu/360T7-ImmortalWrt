@@ -56,13 +56,16 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   `luci-app-mosdns`、简体中文翻译、`mosdns` 和 `v2dat`；规则数据库
   `v2ray-geoip`、`v2ray-geosite` 使用当前 ImmortalWrt 源版本。
 - daed、SSR Plus+、PassWall、OpenClash 和 MosDNS 服务均保持默认禁用。请按实际
-  网络方案选择并配置，避免多个透明代理或 DNS 服务同时接管流量。
+  网络方案选择并配置，避免多个透明代理或 DNS 服务同时接管流量。启用
+  PassWall、SSR Plus+ 或 OpenClash 等策略路由后，应关闭软件/硬件流量分载，
+  避免已建立连接绕过透明代理规则。
 - 不安装普通 `luci-app-openvpn`，也不安装 `mwan3` 及其 LuCI/翻译包。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。
 - 上游 ImageBuilder 即使完成 FIT 和校验和也可能返回非零；工作流不以该
   状态单独判定成功，而是强制执行机型、包清单和固件元数据校验。
-- 全新安装的默认 LAN 地址为 `192.168.2.1`，OpenVPN 默认推送网段同步为
-  `192.168.2.0/24`。
+- 全新安装的默认 LAN 地址为 `192.168.10.1`，OpenVPN 默认推送网段同步为
+  `192.168.10.0/24`。系统主机名为 `zhengzhou-zian`，设备描述为
+  “郑州子安信息科技”。
 - 全新安装会根据设备原 WAN MAC 保留后 5 字节并生成唯一的本地管理
   WAN MAC，规避上级网络克隆原厂 MAC 时出现的回包丢失和 IPv6 DAD 冲突。
 - 默认启用 WAN DHCPv6 客户端，并将 LAN 配置为 RA/DHCPv6/NDP 中继，
@@ -123,7 +126,7 @@ openwrt-mediatek-filogic-qihoo_360t7-initramfs-recovery.itb
 恢复系统启动后访问 `192.168.1.1`，再上传本仓库生成的
 `squashfs-sysupgrade.itb`。initramfs 只用于在内存中启动恢复环境，
 不包含本仓库的自定义默认配置；刷入最终 sysupgrade 固件并完成首次启动后，
-管理地址切换为 `192.168.2.1`。daed 和匹配 BTF 位于最终 sysupgrade 固件中。
+管理地址切换为 `192.168.10.1`。daed 和匹配 BTF 位于最终 sysupgrade 固件中。
 
 ## 刷写限制
 
@@ -132,3 +135,6 @@ openwrt-mediatek-filogic-qihoo_360t7-initramfs-recovery.itb
 SHA-256，并确认文件名包含
 `mediatek-filogic-qihoo_360t7`。不要在其他型号或其他分区布局的设备上
 尝试刷写。
+
+首次登录后应立即设置 root 管理密码。空密码会让所有可访问 LAN 管理面的
+客户端获得完整的 LuCI 和 SSH 管理权限。

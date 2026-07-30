@@ -1,5 +1,8 @@
 #!/bin/sh
 
+set -e
+umask 077
+
 ddns="$(uci -q get openvpn.myvpn.ddns)"
 port="$(uci -q get openvpn.myvpn.port)"
 proto="$(uci -q get openvpn.myvpn.proto | sed 's/server/client/g')"

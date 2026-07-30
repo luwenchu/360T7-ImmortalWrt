@@ -14,7 +14,7 @@ MOSDNS_REPOSITORY="${MOSDNS_REPOSITORY:-sbwml/luci-app-mosdns}"
 LUCI_SOURCE_COMMIT="92685321ae7c2387e89f2ad9441e77359a81d7be"
 IMAGEBUILDER_FILE="immortalwrt-imagebuilder-24.10-SNAPSHOT-mediatek-filogic.Linux-x86_64.tar.zst"
 IMAGE_PACKAGES="-dnsmasq dnsmasq-full daed luci-app-daede vmlinux-btf luci-theme-argon luci-app-argon-config luci-i18n-base-zh-cn luci-i18n-argon-config-zh-cn luci-app-openvpn-server luci-i18n-openvpn-server-zh-cn luci-app-360t7-hwaccel kmod-nft-offload luci-app-ssr-plus luci-app-passwall luci-i18n-passwall-zh-cn luci-app-openclash luci-app-mosdns luci-i18n-mosdns-zh-cn ddns-go luci-app-ddns-go luci-i18n-ddns-go-zh-cn"
-DISABLED_SERVICES="daed shadowsocksr openclash mosdns ddns-go"
+DISABLED_SERVICES="daed shadowsocksr passwall passwall_server openclash mosdns ddns-go"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -56,8 +56,29 @@ openssl genpkey \
   -out "${openvpn_ffdhe}"
 openssl pkeyparam -in "${openvpn_ffdhe}" -check -noout >/dev/null
 chmod 0644 "${openvpn_ffdhe}"
-chmod 0755 "${image_files_dir}/etc/openvpn/renewcert.sh"
-chmod 0755 "${image_files_dir}/etc/uci-defaults/zz-passwall-disabled"
+chmod 0755 \
+  "${image_files_dir}/etc/openvpn/genovpn.sh" \
+  "${image_files_dir}/etc/openvpn/renewcert.sh"
+chmod 0755 \
+  "${image_files_dir}/etc/uci-defaults/97-system-identity" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan" \
+  "${image_files_dir}/etc/uci-defaults/zz-passwall-disabled"
+
+grep -Fq "system.@system[0].hostname='zhengzhou-zian'" \
+  "${image_files_dir}/etc/uci-defaults/97-system-identity"
+grep -Fq "system.@system[0].description='郑州子安信息科技'" \
+  "${image_files_dir}/etc/uci-defaults/97-system-identity"
+grep -Fq "network.lan.ipaddr='192.168.10.1'" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "delete dhcp.wan.ignore" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "route 192.168.10.0 255.255.255.0" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "passwall.@global[0].filter_proxy_ipv6='0'" \
+  "${image_files_dir}/etc/uci-defaults/zz-passwall-disabled"
+grep -Fq "umask 077" "${image_files_dir}/etc/openvpn/genovpn.sh"
+grep -Fq 'NXFS.unlink("/tmp/my.ovpn")' \
+  "${image_files_dir}/usr/lib/lua/luci/model/cbi/openvpn-server/openvpn-server.lua"
 
 download() {
   local url="$1"
@@ -891,8 +912,10 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   factory MAC, avoiding upstream MAC-clone/DAD conflicts
 - IPv6: DHCPv6 client on WAN with LAN RA/DHCPv6/NDP relay for upstream routers
   that provide SLAAC but no DHCPv6 prefix delegation
-- Default LAN address on a clean installation: \`192.168.2.1\`; the bundled
-  OpenVPN server pushes \`192.168.2.0/24\` by default
+- System identity: hostname \`zhengzhou-zian\`, description
+  \`郑州子安信息科技\`
+- Default LAN address on a clean installation: \`192.168.10.1\`; the bundled
+  OpenVPN server pushes \`192.168.10.0/24\` by default
 
 The initramfs recovery image is the checksum-verified upstream image matching
 this ImageBuilder revision. It runs from RAM and intentionally does not contain

@@ -4,9 +4,16 @@
 # configured nodes and routing policy.
 uci -q set passwall.@global[0].enabled='0'
 uci -q set passwall.@global[0].socks_enabled='0'
-uci -q set passwall.@haproxy_config[0].balancing_enable='0'
+uci -q set passwall.@global[0].filter_proxy_ipv6='0'
+uci -q set passwall.@global_delay[0].start_daemon='0'
+uci -q set passwall.@global_haproxy[0].balancing_enable='0'
 uci -q set passwall_server.@global[0].enable='0'
 uci -q commit passwall
 uci -q commit passwall_server
+
+for service_name in passwall passwall_server; do
+	"/etc/init.d/${service_name}" stop >/dev/null 2>&1 || true
+	"/etc/init.d/${service_name}" disable >/dev/null 2>&1 || true
+done
 
 exit 0

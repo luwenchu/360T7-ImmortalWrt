@@ -98,6 +98,7 @@ function Download()
 		luci.http.write(chunk)
 	end
 	file:close()
+	NXFS.unlink("/tmp/my.ovpn")
 	luci.http.close()
 end
 
