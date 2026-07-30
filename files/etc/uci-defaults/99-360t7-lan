@@ -1,22 +1,77 @@
 #!/bin/sh
 
+# shellcheck disable=SC1091
+. /lib/functions.sh
+. /lib/functions/system.sh
+
 uci -q set network.lan.ipaddr='192.168.10.1'
 uci -q delete network.lan.ip6assign
 
-# Keep the device-specific suffix while avoiding an upstream clone of the
-# factory WAN MAC, which breaks IPv4 return traffic and IPv6 DAD.
+valid_unicast_mac()
+{
+	validated_mac="$(macaddr_canonicalize "$1" 2>/dev/null)"
+	case "$validated_mac" in
+		00:00:00:00:00:00|ff:ff:ff:ff:ff:ff|'')
+			return 1
+			;;
+		??:??:??:??:??:??)
+			first_octet="${validated_mac%%:*}"
+			[ $((0x${first_octet} & 1)) -eq 0 ]
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+random_local_mac()
+{
+	random_suffix="$(
+		dd if=/dev/urandom bs=5 count=1 2>/dev/null |
+			hexdump -v -e '5/1 "%02x"'
+	)"
+	printf '%s\n' "$random_suffix" |
+		awk '{
+			printf "02:%s:%s:%s:%s:%s\n",
+				substr($0,1,2), substr($0,3,2), substr($0,5,2),
+				substr($0,7,2), substr($0,9,2)
+		}'
+}
+
+# The calibration MAC at Factory offset 0x4 is device-specific and survives
+# normal firmware upgrades. On the 360T7 it is LAN+2.
+cal_mac="$(mtd_get_mac_binary Factory 0x4 2>/dev/null)"
+if valid_unicast_mac "$cal_mac"; then
+	lan_mac="$(macaddr_add "$cal_mac" -2)"
+	wan_base_mac="$(macaddr_add "$cal_mac" -1)"
+else
+	lan_mac="$(mtd_get_mac_ascii factory lanMac 2>/dev/null)"
+	if ! valid_unicast_mac "$lan_mac"; then
+		lan_mac="$(random_local_mac)"
+	fi
+	wan_base_mac="$(macaddr_add "$lan_mac" 1)"
+fi
+
+# Keep WAN unique while setting the locally administered bit. LAN switch
+# ports intentionally share one bridge MAC on the same router.
+wan_mac="$(macaddr_setbit_la "$wan_base_mac")"
+
+for device_name in br-lan lan1 lan2 lan3; do
+	device_section="$(
+		uci show network |
+			sed -n "s/^\\(network\\.[^=]*\\)\\.name='${device_name}'$/\\1/p" |
+			head -n 1
+	)"
+	[ -n "$device_section" ] &&
+		uci -q set "${device_section}.macaddr=${lan_mac}"
+done
+
 wan_device="$(
 	uci show network |
-		grep "\.name='wan'$" |
-		cut -d. -f1-2 |
+		sed -n "s/^\\(network\\.[^=]*\\)\\.name='wan'$/\\1/p" |
 		head -n 1
 )"
-wan_mac="$(uci -q get "${wan_device}.macaddr")"
-case "${wan_mac}" in
-	??:??:??:??:??:??)
-		uci -q set "${wan_device}.macaddr=02:${wan_mac#*:}"
-		;;
-esac
+[ -n "$wan_device" ] && uci -q set "${wan_device}.macaddr=${wan_mac}"
 
 uci -q set network.wan6='interface'
 uci -q set network.wan6.proto='dhcpv6'

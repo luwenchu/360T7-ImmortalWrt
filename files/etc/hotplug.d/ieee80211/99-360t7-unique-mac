@@ -1,0 +1,24 @@
+#!/bin/sh
+
+[ "$(board_name)" = "qihoo,360t7" ] || exit 0
+
+# shellcheck disable=SC1091
+. /lib/functions.sh
+# shellcheck disable=SC1091
+. /lib/functions/system.sh
+
+cal_mac="$(mtd_get_mac_binary Factory 0x4 2>/dev/null)"
+case "$cal_mac" in
+	00:00:00:00:00:00|ff:ff:ff:ff:ff:ff|''|*[!0-9a-fA-F:]*)
+		exit 0
+		;;
+esac
+
+case "$PHYNBR" in
+	0)
+		echo "$cal_mac" >"/sys${DEVPATH}/macaddress"
+		;;
+	1)
+		macaddr_add "$cal_mac" 1 >"/sys${DEVPATH}/macaddress"
+		;;
+esac
