@@ -781,85 +781,12 @@ fi
   sha256sum -- "${firmware_name}" >"${firmware_name}.sha256"
 )
 
-echo "Preparing the legacy kernel/rootfs upgrade logic for the U-Boot Web image..."
-legacy_files="${WORK_DIR}/legacy-files"
-cp -a "${image_files_dir}" "${legacy_files}"
-legacy_platform_source="${imagebuilder_dir}/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh"
-legacy_platform="${legacy_files}/lib/upgrade/platform.sh"
-if [[ ! -f "${legacy_platform_source}" ]]; then
-  legacy_platform_source="${WORK_DIR}/platform.sh"
-  curl --fail --location --retry 4 --retry-all-errors \
-    --connect-timeout 20 --max-time 300 \
-    --output "${legacy_platform_source}" \
-    "https://raw.githubusercontent.com/immortalwrt/immortalwrt/openwrt-24.10/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh"
-fi
-mkdir -p "$(dirname "${legacy_platform}")"
-
-awk '
-  $0 == "platform_do_upgrade() {" {
-    in_upgrade = 1
-  }
-  in_upgrade && !inserted && $0 ~ /^[[:space:]]*case "\$board" in$/ {
-    print
-    print "\tqihoo,360t7)"
-    print "\t\tCI_UBIPART=\"ubi\""
-    print "\t\tCI_KERNPART=\"kernel\""
-    print "\t\tCI_ROOTPART=\"rootfs\""
-    print "\t\tnand_do_upgrade \"$1\""
-    print "\t\t;;"
-    inserted = 1
-    next
-  }
-  in_upgrade && $0 ~ /^[[:space:]]*qihoo,360t7\|\\$/ {
-    removed = 1
-    next
-  }
-  { print }
-  END {
-    if (!inserted || !removed) {
-      exit 1
-    }
-  }
-' "${legacy_platform_source}" >"${legacy_platform}"
-
-grep -Fq $'\tqihoo,360t7)' "${legacy_platform}"
-if grep -Fq $'\tqihoo,360t7|\\' "${legacy_platform}"; then
-  echo "The FIT-volume 360T7 upgrade branch was not removed." >&2
-  exit 1
-fi
-
-echo "Building the rootfs variant dedicated to the legacy U-Boot layout..."
-if make -C "${imagebuilder_dir}" image \
-    PROFILE="${PROFILE}" \
-    PACKAGES="${IMAGE_PACKAGES}" \
-    DISABLED_SERVICES="${DISABLED_SERVICES}" \
-    FILES="${legacy_files}"; then
-  legacy_imagebuilder_status=0
-else
-  legacy_imagebuilder_status=$?
-fi
-echo "Legacy-layout ImageBuilder command status: ${legacy_imagebuilder_status}"
-if [[ "${legacy_imagebuilder_status}" -ne 0 ]]; then
-  echo "ImageBuilder returned ${legacy_imagebuilder_status}; validating the generated legacy-layout source image."
-fi
-
-shopt -s nullglob
-legacy_source_images=(
-  "${imagebuilder_dir}"/bin/targets/mediatek/filogic/*qihoo_360t7*squashfs-sysupgrade.itb
-)
-shopt -u nullglob
-if [[ "${#legacy_source_images[@]}" -ne 1 ]]; then
-  echo "Expected one temporary 360T7 FIT for U-Boot Web conversion." >&2
-  exit 1
-fi
-
-uboot_web_name="${firmware_name%.itb}-uboot-web.bin"
-echo "Converting ${legacy_source_images[0]} to ${uboot_web_name}..."
+uboot_web_name="${firmware_name%.itb}-uboot-web-fit.bin"
+echo "Creating raw FIT Web upgrade image ${uboot_web_name}..."
 bash "${ROOT_DIR}/scripts/make-uboot-web.sh" \
   "${imagebuilder_dir}" \
-  "${legacy_source_images[0]}" \
+  "${DIST_DIR}/${firmware_name}" \
   "${DIST_DIR}/${uboot_web_name}" \
-  "${kernel_version}" \
   "${metadata_file}"
 (
   cd "${DIST_DIR}"
@@ -918,11 +845,16 @@ this ImageBuilder revision. It runs from RAM and intentionally does not contain
 daed. Boot it first when recovering through U-Boot, then flash the dedicated
 sysupgrade image from the recovery system.
 
-The \`*-uboot-web.bin\` asset is only for the Qihoo 360T7 U-Boot Web updater
-that accepts a sysupgrade tar containing separate \`kernel\` and \`root\`
-members. It is generated from the same ImageBuilder kernel and rootfs as this
-Release, but uses the legacy 360T7 UBI volume layout expected by that updater.
-Do not rename or upload the combined \`.itb\` file to the U-Boot Web page.
+The \`*-uboot-web-fit.bin\` asset is a byte-identical copy of the combined FIT
+sysupgrade image with a \`.bin\` suffix for the U-Boot Web Firmware update
+page. It requires 360T7 U-Boot v1.0.5 or later, which uses the same raw
+SPI-NAND address space as ImmortalWrt and writes a single \`fit\` UBI volume.
+Do not use this image with the older NMBM-based U-Boot releases.
+
+The retired \`*-uboot-web.bin\` tar format created separate \`kernel\` and
+\`rootfs\` volumes and must not be used. A device previously written by that
+legacy format must rebuild only its \`ubi\` partition with
+\`scripts/recover-fit-ubi.sh\` before using the new FIT-based BIN.
 
 The build fails instead of publishing when the daed Release does not contain a
 BTF package matching both the ImageBuilder kernel version and package architecture.
