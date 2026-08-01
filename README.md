@@ -46,10 +46,6 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - 从同一个 SSR Plus+ Release 标签检出官方源代码，将 `zh_Hans`
   翻译编译为 `ssr-plus.zh-cn.lmo`，并将 LuCI 默认语言设为简体中文；
   构建记录源代码提交和 LMO SHA-256，避免插件与翻译版本错配。
-- 从与 ImageBuilder 完全匹配的 ImmortalWrt 24.10 软件源集成
-  `luci-app-passwall`、`luci-i18n-passwall-zh-cn` 及其运行依赖。
-  PassWall 客户端、Socks、负载均衡和服务端主开关默认关闭，完成节点和
-  路由规则配置后再启用，避免与其他透明代理同时接管流量。
 - 从 `vernesong/OpenClash` 的当前最新 Release 集成
   `luci-app-openclash`。OpenClash 核心由插件的核心管理页面按需下载，
   固件中预装其 LuCI 与全部硬依赖。
@@ -57,9 +53,9 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   `OpenWrt 24.10`、`aarch64_cortex-a53` 精确匹配的包组，集成
   `luci-app-mosdns`、简体中文翻译、`mosdns` 和 `v2dat`；规则数据库
   `v2ray-geoip`、`v2ray-geosite` 使用当前 ImmortalWrt 源版本。
-- daed、SSR Plus+、PassWall、OpenClash 和 MosDNS 服务均保持默认禁用。请按实际
+- daed、SSR Plus+、OpenClash 和 MosDNS 服务均保持默认禁用。请按实际
   网络方案选择并配置，避免多个透明代理或 DNS 服务同时接管流量。启用
-  PassWall、SSR Plus+ 或 OpenClash 等策略路由后，应关闭软件/硬件流量分载，
+  SSR Plus+ 或 OpenClash 等策略路由后，应关闭软件/硬件流量分载，
   避免已建立连接绕过透明代理规则。
 - 不安装普通 `luci-app-openvpn`，也不安装 `mwan3` 及其 LuCI/翻译包。
 - 只保留并发布文件名包含 `qihoo_360t7` 的 sysupgrade 镜像。
