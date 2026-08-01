@@ -709,10 +709,7 @@ for required_package in \
   ca-bundle \
   coreutils \
   coreutils-base64 \
-  coreutils-nohup \
   curl \
-  chinadns-ng \
-  dns2socks \
   dns2tcp \
   dnsmasq-full \
   ip-full \
@@ -731,7 +728,6 @@ for required_package in \
   resolveip \
   ruby \
   ruby-yaml \
-  tcping \
   unzip \
   v2ray-geoip \
   v2ray-geosite \
@@ -743,6 +739,12 @@ for required_package in \
     exit 1
   fi
 done
+
+if grep -Eq '^(luci-app-passwall|luci-i18n-passwall-zh-cn) - ' \
+  "${DIST_DIR}/${firmware_name%.itb}.manifest"; then
+  echo "PassWall was unexpectedly included in the generated image manifest." >&2
+  exit 1
+fi
 
 for forbidden_package in \
   dnsmasq \
