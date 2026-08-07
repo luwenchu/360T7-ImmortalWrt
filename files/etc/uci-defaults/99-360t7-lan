@@ -5,6 +5,8 @@
 . /lib/functions/system.sh
 
 uci -q set network.lan.ipaddr='192.168.10.1'
+uci -q delete network.lan6
+uci -q delete network.wan6
 uci -q delete network.lan.ip6assign
 
 valid_unicast_mac()
@@ -73,25 +75,15 @@ wan_device="$(
 )"
 [ -n "$wan_device" ] && uci -q set "${wan_device}.macaddr=${wan_mac}"
 
-uci -q set network.wan6='interface'
-uci -q set network.wan6.proto='dhcpv6'
-uci -q set network.wan6.device='@wan'
-uci -q set network.wan6.reqaddress='try'
-uci -q set network.wan6.reqprefix='auto'
 uci -q commit network
 
-uci -q set dhcp.lan.ra='relay'
-uci -q set dhcp.lan.dhcpv6='relay'
-uci -q set dhcp.lan.ndp='relay'
+uci -q set dhcp.lan.ra='disabled'
+uci -q set dhcp.lan.dhcpv6='disabled'
+uci -q set dhcp.lan.ndp='disabled'
 uci -q delete dhcp.lan.ra_slaac
 uci -q delete dhcp.lan.ra_management
-uci -q set dhcp.wan='dhcp'
-uci -q set dhcp.wan.interface='wan'
-uci -q delete dhcp.wan.ignore
-uci -q set dhcp.wan.master='1'
-uci -q set dhcp.wan.ra='relay'
-uci -q set dhcp.wan.dhcpv6='relay'
-uci -q set dhcp.wan.ndp='relay'
+uci -q delete dhcp.wan
+uci -q set dhcp.@dnsmasq[0].filter_aaaa='1'
 uci -q commit dhcp
 
 uci -q del_list openvpn.myvpn.push='route 192.168.1.0 255.255.255.0'

@@ -23,7 +23,7 @@ require_command() {
   }
 }
 
-for command_name in curl gcc git jq sha256sum tar zstd make find readlink realpath od du openssl; do
+for command_name in curl gcc git jq sha256sum tar zstd make find readlink realpath od du openssl sqlite3; do
   require_command "${command_name}"
 done
 
@@ -60,11 +60,21 @@ chmod 0755 \
   "${image_files_dir}/etc/openvpn/genovpn.sh" \
   "${image_files_dir}/etc/openvpn/renewcert.sh"
 chmod 0755 \
-  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan" \
+  "${ROOT_DIR}/scripts/patch-daede-defaults.sh" \
+  "${ROOT_DIR}/scripts/seed-daed-db.sh"
 
 grep -Fq "network.lan.ipaddr='192.168.10.1'" \
   "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
-grep -Fq "delete dhcp.wan.ignore" \
+grep -Fq "delete network.lan6" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "delete network.wan6" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "delete network.lan.ip6assign" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "dhcp.lan.ra='disabled'" \
+  "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
+grep -Fq "dhcp.@dnsmasq[0].filter_aaaa='1'" \
   "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
 grep -Fq "route 192.168.10.0 255.255.255.0" \
   "${image_files_dir}/etc/uci-defaults/99-360t7-lan"
@@ -255,6 +265,10 @@ select_asset() {
 daed_asset="$(select_asset \
   '(.name | startswith("daed_" + $release + "-") and endswith("_" + $arch + ".ipk"))' \
   "daed IPK for ${ARCH}")"
+# shellcheck disable=SC2016
+daed_host_asset="$(select_asset \
+  '(.name | startswith("daed_" + $release + "-") and endswith("_x86_64.ipk"))' \
+  "host daed IPK for x86_64")"
 luci_asset="$(select_asset \
   '(.name | startswith("luci-app-daede_") and endswith("_all.ipk"))' \
   "luci-app-daede IPK")"
@@ -277,6 +291,12 @@ for asset in "${daed_asset}" "${luci_asset}" "${btf_asset}"; do
     echo "${asset_digest#sha256:}  ${destination}" | sha256sum --check -
   fi
 done
+
+daed_host_package="${WORK_DIR}/downloads/${daed_host_asset}"
+download_release_asset \
+  "${WORK_DIR}/daed-release.json" \
+  "${daed_host_asset}" \
+  "${daed_host_package}"
 
 echo "Resolving the current SSR Plus+, OpenClash and MosDNS Releases..."
 ssr_release="${WORK_DIR}/ssr-plus-release.json"
@@ -530,14 +550,43 @@ for version in \
   fi
 done
 
+echo "Generating userless daed IPv4/AliDNS defaults..."
+host_repack="${WORK_DIR}/daed-host"
+mkdir -p "${host_repack}/outer" "${host_repack}/data"
+tar --extract \
+  --file "${daed_host_package}" \
+  --directory "${host_repack}/outer"
+tar --extract --gzip \
+  --file "${host_repack}/outer/data.tar.gz" \
+  --directory "${host_repack}/data"
+host_daed="${host_repack}/data/usr/bin/daed"
+chmod 0755 "${host_daed}"
+if [[ "$("${host_daed}" --version)" != "daed version ${daed_tag#v}" ]]; then
+  echo "The host daed binary version does not match ${daed_tag}." >&2
+  exit 1
+fi
+daed_seed_db="${image_files_dir}/etc/daed/wing.db"
+"${ROOT_DIR}/scripts/seed-daed-db.sh" "${host_daed}" "${daed_seed_db}"
+if [[ ! -s "${daed_seed_db}" ||
+      "$(sqlite3 "${daed_seed_db}" 'SELECT count(*) FROM users;')" != "0" ]]; then
+  echo "The generated daed database is missing or contains a user." >&2
+  exit 1
+fi
+
 (
   cd "${WORK_DIR}/external-packages"
   sha256sum -- *.ipk >"${DIST_DIR}/external-packages.sha256"
 )
 
 patched_packages="${WORK_DIR}/patched-packages"
-repack_dir="${WORK_DIR}/daed-repack"
-mkdir -p "${patched_packages}" "${repack_dir}/outer" "${repack_dir}/data"
+daed_repack="${WORK_DIR}/daed-repack"
+luci_repack="${WORK_DIR}/luci-daede-repack"
+mkdir -p \
+  "${patched_packages}" \
+  "${daed_repack}/outer" \
+  "${daed_repack}/data" \
+  "${luci_repack}/outer" \
+  "${luci_repack}/data"
 for external_package in "${WORK_DIR}/external-packages/"*.ipk; do
   external_package_name="$(package_field "${external_package}" Package)"
   case "${external_package_name}" in
@@ -556,11 +605,11 @@ done
 # Repack the already verified IPK with a relative-root fallback for build time.
 tar --extract \
   --file "${WORK_DIR}/external-packages/${daed_asset}" \
-  --directory "${repack_dir}/outer"
+  --directory "${daed_repack}/outer"
 tar --extract --gzip \
-  --file "${repack_dir}/outer/data.tar.gz" \
-  --directory "${repack_dir}/data"
-daed_init="${repack_dir}/data/etc/init.d/daed"
+  --file "${daed_repack}/outer/data.tar.gz" \
+  --directory "${daed_repack}/data"
+daed_init="${daed_repack}/data/etc/init.d/daed"
 if [[ "$(grep -c '^\. /usr/share/daed/cleanup\.sh$' "${daed_init}")" != "1" ]]; then
   echo "The daed init script has an unexpected cleanup helper declaration." >&2
   exit 1
@@ -580,12 +629,32 @@ chmod 0755 "${daed_init}"
 
 tar --create --gzip \
   --owner=0 --group=0 --numeric-owner \
-  --file "${repack_dir}/outer/data.tar.gz" \
-  --directory "${repack_dir}/data" .
+  --file "${daed_repack}/outer/data.tar.gz" \
+  --directory "${daed_repack}/data" .
 tar --create --gzip \
   --owner=0 --group=0 --numeric-owner \
   --file "${patched_packages}/${daed_asset}" \
-  --directory "${repack_dir}/outer" \
+  --directory "${daed_repack}/outer" \
+  ./debian-binary ./control.tar.gz ./data.tar.gz
+
+# Keep the upstream LuCI package intact except for its dae form defaults and
+# generated configuration template. Both backends then share the same IPv4
+# health checks and direct AliDNS resolver policy.
+tar --extract \
+  --file "${WORK_DIR}/external-packages/${luci_asset}" \
+  --directory "${luci_repack}/outer"
+tar --extract --gzip \
+  --file "${luci_repack}/outer/data.tar.gz" \
+  --directory "${luci_repack}/data"
+"${ROOT_DIR}/scripts/patch-daede-defaults.sh" "${luci_repack}/data"
+tar --create --gzip \
+  --owner=0 --group=0 --numeric-owner \
+  --file "${luci_repack}/outer/data.tar.gz" \
+  --directory "${luci_repack}/data" .
+tar --create --gzip \
+  --owner=0 --group=0 --numeric-owner \
+  --file "${patched_packages}/${luci_asset}" \
+  --directory "${luci_repack}/outer" \
   ./debian-binary ./control.tar.gz ./data.tar.gz
 
 cp "${patched_packages}"/*.ipk "${imagebuilder_dir}/packages/"
@@ -801,6 +870,12 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
 - daed Release: \`${daed_tag}\`
 - Integrated packages: \`${daed_asset}\` (\`${daed_version}\`),
   \`${luci_asset}\` (\`${luci_version}\`), \`${btf_asset}\` (\`${btf_version}\`)
+- daed defaults: userless build-time database, IPv4-only TCP/UDP health targets,
+  bootstrap/fallback/subscription/node resolution through \`223.5.5.5:53\`,
+  direct AliDNS upstream and rejected AAAA responses; the matching host daed
+  binary validates the database twice with \`run(dry:true)\`
+- dae LuCI defaults: the generated configuration uses the same IPv4 health
+  targets and AliDNS policy instead of Google or IPv6 DNS targets
 - LuCI theme: \`luci-theme-argon\` (selected as the default theme),
   \`luci-app-argon-config\` and its Chinese translation
 - OpenVPN server: \`luci-app-openvpn-server\` with Chinese translation,
@@ -829,8 +904,9 @@ cat >"${DIST_DIR}/RELEASE_NOTES.md" <<EOF
   on first boot
 - WAN MAC: a device-unique locally administered address derived from the
   factory MAC, avoiding upstream MAC-clone/DAD conflicts
-- IPv6: DHCPv6 client on WAN with LAN RA/DHCPv6/NDP relay for upstream routers
-  that provide SLAAC but no DHCPv6 prefix delegation
+- IPv6: \`lan6\`, \`wan6\` and LAN prefix assignment are removed; LAN
+  RA/DHCPv6/NDP is disabled and dnsmasq \`filter_aaaa=1\` suppresses AAAA
+  answers by default
 - Default LAN address on a clean installation: \`192.168.10.1\`; the bundled
   OpenVPN server pushes \`192.168.10.0/24\` by default
 

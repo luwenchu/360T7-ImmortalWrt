@@ -13,6 +13,13 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
 - 对已校验的 daed IPK 做最小构建兼容修补：保留 Release 二进制与
   `cleanup.sh`，只给 init 脚本的绝对引用增加 ImageBuilder rootfs
   相对路径回退，避免其在 Ubuntu 宿主环境执行时错误退出。
+- 使用同一 Release 的 x86_64 daed 在构建机上生成初始 `wing.db`：
+  节点健康检查只使用 IPv4 目标，bootstrap、fallback、订阅和节点解析
+  统一使用 `223.5.5.5:53`，DNS 直接查询 AliDNS 并拒绝 AAAA 响应。
+  构建会两次执行 daed `dry-run`，删除一次性校验账号、压缩数据库并确认
+  `numberUsers=0`，固件不会预置面板账号、密码、订阅或节点。
+- 对 `luci-app-daede` 的 dae 配置生成器同步应用相同的 IPv4/AliDNS
+  默认项，避免切换后恢复 Google DNS 或 IPv6 健康检查目标。
 - BTF 必须同时匹配 ImageBuilder 的内核版本和
   `aarch64_cortex-a53` 架构；没有唯一匹配项时构建立即失败。
 - 生成后检查包 manifest，确认 `daed`、`luci-app-daede` 和
@@ -65,8 +72,9 @@ SquashFS sysupgrade 镜像。构建流程不会生成、接受或发布其他机
   `192.168.10.0/24`。
 - 全新安装会根据设备原 WAN MAC 保留后 5 字节并生成唯一的本地管理
   WAN MAC，规避上级网络克隆原厂 MAC 时出现的回包丢失和 IPv6 DAD 冲突。
-- 默认启用 WAN DHCPv6 客户端，并将 LAN 配置为 RA/DHCPv6/NDP 中继，
-  适配上级路由仅提供 SLAAC `/64`、不下发 DHCPv6-PD 的二级路由环境。
+- 默认删除 `lan6`、`wan6` 和 LAN IPv6 前缀分配，关闭 LAN
+  RA/DHCPv6/NDP，并为 dnsmasq 设置 `filter_aaaa=1`。IPv6 和 AAAA
+  默认不可用，需要时必须由管理员重新配置。
 
 ## GitHub Actions 构建
 
@@ -86,7 +94,7 @@ Release 会更新原有资产，不创建其他机型产物。
 ## 本地 Linux 构建
 
 需要 Linux x86_64、约 5 GB 可用空间，以及 `curl`、`jq`、`make`、
-`openssl`、`tar`、`zstd` 等基础工具：
+`openssl`、`sqlite3`、`tar`、`zstd` 等基础工具：
 
 ```bash
 chmod +x scripts/build.sh
@@ -137,6 +145,8 @@ recovery 的 LuCI 页面上传 `squashfs-sysupgrade.itb`。
 initramfs 只用于在内存中启动恢复环境，
 不包含本仓库的自定义默认配置；刷入最终 sysupgrade 固件并完成首次启动后，
 管理地址切换为 `192.168.10.1`。daed 和匹配 BTF 位于最终 sysupgrade 固件中。
+全新安装使用上述无账号 IPv4/AliDNS 默认数据库；保留配置升级时，daed
+上游的 keep 规则会保留已有 `wing.db`，不会覆盖现有账号、订阅和节点。
 
 ## 刷写限制
 
